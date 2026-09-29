@@ -181,6 +181,10 @@ def init_db(features):
 _ADDED_USER_COLUMNS = [
     ("model_version",       "INTEGER NOT NULL DEFAULT 0"),
     ("tutorial_seen_count", "INTEGER NOT NULL DEFAULT 0"),
+    # Which model type this participant sees for the whole study — set once
+    # at signup, never changed after. Existing rows default to "fft" so
+    # nothing about already-running sessions changes.
+    ("model_type",          "TEXT NOT NULL DEFAULT 'fft'"),
 ]
 
 
@@ -407,6 +411,27 @@ def bump_model_version(username):
             "SELECT model_version FROM users WHERE username=?", (username,)
         ).fetchone()
     return int(row["model_version"]) if row else 0
+
+
+# ── model type ────────────────────────────────────────────────────────────────
+# Chosen once at signup (see app.py's do_start), never changed after — a
+# participant sees exactly one of "fft" / "twostage" for their whole session.
+
+def set_model_type(username, model_type):
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO users (username, model_type) VALUES (?, ?) "
+            "ON CONFLICT(username) DO UPDATE SET model_type = excluded.model_type",
+            (username, model_type),
+        )
+
+
+def get_model_type(username):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT model_type FROM users WHERE username=?", (username,)
+        ).fetchone()
+    return row["model_type"] if row and row["model_type"] else "fft"
 
 
 # ── tutorial ──────────────────────────────────────────────────────────────────

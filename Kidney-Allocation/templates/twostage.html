@@ -1,0 +1,692 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+.ts-step-title { font-size: 1.4rem; font-weight: 600; margin: 26px 0 4px; font-family: var(--font-serif, serif); }
+.ts-step-sub { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
+.ts-legend { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }
+.ts-legend b.up { color: var(--patient-a); }
+.ts-legend b.down { color: var(--patient-b); }
+
+.ts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .ts-grid { grid-template-columns: 1fr; } }
+
+.ts-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; margin-bottom: 0;
+}
+.ts-fhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 10px; }
+.ts-fname { font-size: 16px; font-weight: 600; }
+.ts-badge {
+  font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+}
+.ts-badge.favor { background: var(--patient-a-soft); color: var(--patient-a); }
+.ts-badge.against { background: var(--patient-b-soft); color: var(--patient-b); }
+.ts-badge.none { background: var(--surface); color: var(--text-muted); }
+.ts-fdesc { font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px; }
+
+.stripchart { width: 100%; height: auto; display: block; margin: 6px 0 4px; }
+.ts-axis { font-size: 10px; fill: var(--text-muted); }
+
+.ts-divider { border: none; border-top: 1px dashed var(--border); margin: 14px 0; }
+.ts-controls-label { font-size: 12.5px; color: var(--text-muted); margin-bottom: 6px; }
+
+.ts-fname { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+.ts-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.ts-row .lab { font-size: 13px; color: var(--text-secondary); min-width: 110px; }
+.ts-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.ts-btn {
+  font-size: 13px; padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border);
+  background: #fff; cursor: pointer; color: var(--text);
+}
+.ts-btn.active { background: var(--text-primary); border-color: var(--text-primary); color: #fff; }
+.ts-btn.active.favor { background: var(--patient-a); border-color: var(--patient-a); }
+.ts-btn.active.against { background: var(--patient-b); border-color: var(--patient-b); }
+.ts-cutoff { width: 70px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); }
+.ts-sentence { font-size: 14px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
+.ts-off { opacity: .7; }
+
+.ts-agg-card {
+  border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer;
+}
+.ts-agg-card.active { border-color: var(--patient-a); background: var(--patient-a-soft); }
+.ts-agg-title { font-weight: 600; font-size: 14px; }
+.ts-agg-desc { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+
+.ts-match-panel {
+  width: 100%; display: flex; align-items: center; gap: 16px; text-align: left;
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; margin-bottom: 8px; cursor: pointer; font-family: inherit;
+  transition: border-color .12s, background .12s;
+}
+.ts-match-panel:hover { border-color: var(--patient-a); background: var(--patient-a-soft); }
+.ts-match-num {
+  flex-shrink: 0; width: 52px; height: 52px; border-radius: 12px; background: var(--patient-a-soft);
+  color: var(--patient-a); font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.ts-match-body { flex: 1; }
+.ts-match-line { font-size: 15px; font-weight: 600; }
+.ts-match-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.ts-match-chevron { font-size: 18px; color: var(--text-muted); flex-shrink: 0; }
+
+.ts-summary-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; margin: 18px 0;
+}
+.ts-summary-label { font-size: 12.5px; color: var(--text-muted); margin-bottom: 8px; }
+.ts-summary-text { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+.ts-summary-text b.favor { color: var(--patient-a); }
+.ts-summary-text b.against { color: var(--patient-b); }
+
+.ts-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none;
+  align-items: center; justify-content: center; padding: 24px; z-index: 200;
+}
+.ts-modal-dialog {
+  background: #fff; border-radius: 16px; width: 100%; max-width: 760px; max-height: 88vh;
+  display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(15,23,42,.25);
+}
+.ts-modal-header { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.ts-modal-title { font-size: 16px; font-weight: 600; flex: 1; }
+.ts-modal-close { font-size: 15px; color: var(--text-muted); background: none; border: none; cursor: pointer; width: 28px; height: 28px; border-radius: 6px; }
+.ts-modal-close:hover { background: var(--surface); }
+.ts-modal-body { padding: 18px 20px 24px; overflow-y: auto; }
+
+.ts-case-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.ts-case-chip { aspect-ratio: 1; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; border: 2px solid transparent; }
+.ts-case-legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; }
+.ts-case-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+.ts-case-card, .ts-builder-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.ts-prow { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+
+.ts-slider-row { margin-bottom: 10px; }
+.ts-slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+</style>
+{% endblock %}
+{% block content %}
+<h2>This is how the AI thinks you are making your decisions. Is it correct?</h2>
+<div class="muted" style="font-size:15px; margin:8px 0 18px; line-height:1.6;">
+  Follow the steps below. You can make changes to the model AI learned, as you see fit, to better
+  reflect your decision-making process. The panel below also shows you how your changes impact
+  what choices the model predicts you will make.
+</div>
+
+<button class="ts-match-panel" id="ts-match-panel" type="button">
+  <div class="ts-match-num" id="ts-match-num">–</div>
+  <div class="ts-match-body">
+    <div class="ts-match-line" id="ts-match-line"></div>
+    <div class="ts-match-sub" id="ts-match-sub"></div>
+  </div>
+  <div class="ts-match-chevron">→</div>
+</button>
+
+<div class="ts-modal-backdrop" id="ts-modal-backdrop">
+  <div class="ts-modal-dialog">
+    <div class="ts-modal-header">
+      <div class="ts-modal-title">See how your model performs</div>
+      <button class="ts-modal-close" id="ts-modal-close" type="button">✕</button>
+    </div>
+    <div class="ts-modal-body">
+      <div class="muted" style="font-size:13px; margin-bottom:10px;">
+        Each square is one of your <span id="ts-case-total"></span> cases. Tap any square to see that pair and what your model predicts.
+      </div>
+      <div class="ts-case-grid" id="ts-case-grid"></div>
+      <div class="ts-case-legend">
+        <span><span class="sw" style="background:var(--patient-a-soft); border:1px solid var(--patient-a);"></span>agrees with your choice</span>
+        <span><span class="sw" style="background:var(--patient-b-soft); border:1px solid var(--patient-b);"></span>disagrees</span>
+      </div>
+      <div id="ts-case-detail"></div>
+
+      <hr style="margin:26px 0; border:none; border-top:1px solid var(--border);">
+      <div style="font-size:16px; font-weight:600; margin-bottom:4px;">Try your own case</div>
+      <div class="muted" style="font-size:13px; margin-bottom:14px;">Set up any two patients and see how your model would decide between them.</div>
+      <div id="ts-builder"></div>
+    </div>
+  </div>
+</div>
+
+<div class="ts-step-title">Step 1. Check if the model is correct about how you consider each feature.</div>
+<div class="ts-step-sub">
+  {% if not final_mode %}If not, use the buttons on each card to change how the model treats that factor.{% endif %}
+</div>
+<div class="ts-legend">
+  In each picture, bars that <b class="up">rise</b> mean the factor makes a patient <b class="up">more likely</b>
+  to be chosen; bars that <b class="down">fall</b> mean it makes them <b class="down">less likely</b>; flat bars mean it makes no difference.
+</div>
+
+<div class="ts-grid" id="ts-features"></div>
+
+<div class="ts-step-title">Step 2. Check if this is how you combine the features.</div>
+<div class="ts-step-sub">
+  {% if not final_mode %}Choose the strategy that most accurately reflects how you ultimately decide.{% endif %}
+</div>
+<div id="ts-agg"></div>
+
+<div class="ts-summary-card">
+  <div class="ts-summary-label">Your whole model, in plain words</div>
+  <div class="ts-summary-text" id="ts-summary-text"></div>
+</div>
+
+{% if not final_mode %}
+<div style="display:flex; gap:12px; margin:22px 0;">
+  <button class="btn btn-secondary" id="ts-reset" type="button" {% if not has_override %}style="display:none"{% endif %}>↺ Reset to original model</button>
+  <button class="btn btn-primary" id="ts-apply" type="button">Apply changes</button>
+</div>
+
+<hr>
+<div class="rating-title" style="font-size:1.15rem; font-weight:600; margin:18px 0 6px;" id="ts-rating-title">How well does this match your thinking?</div>
+<div class="muted" style="font-size:14px; margin-bottom:14px;">1 = not at all &nbsp;&nbsp;·&nbsp;&nbsp; 7 = perfectly</div>
+<div style="display:flex; gap:8px; margin-bottom:20px;" id="ts-score-row"></div>
+
+<div style="display:flex; justify-content:flex-end;">
+  <button class="btn btn-primary" id="ts-continue" type="button">Continue to Part 2 →</button>
+</div>
+{% else %}
+<div class="alert alert-success" style="margin-top:24px;">
+  You've completed the study — thank you. Your responses have been saved.
+</div>
+{% endif %}
+
+<script>
+'use strict';
+var FEATURES_DATA = {{ features_json | tojson }};
+var FEATURE_RANGES = {{ feature_ranges_json | tojson }};
+var model = {{ model_json | tojson }};
+var pastScenarios = {{ past_scenarios_json | tojson }};
+var FINAL_MODE = {{ final_mode | tojson }};
+var APPLY_URL = {{ apply_url | tojson }};
+var RESET_URL = {{ reset_url | tojson }};
+var RATE_URL = {{ rate_url | tojson }};
+var CONTINUE_URL = {{ continue_url | tojson }};
+var currentScore = {{ current_score | tojson }};
+var BASELINE_MATCHES = {{ baseline_matches | tojson }};
+
+var AMP = [0, 1.0, 2.0, 3.2];
+var GAIN = 0.9, TALLY_GAIN = 0.95;
+
+function editValue(key, v) {
+  var st = model.features[key];
+  if (!st || st.matters === 0) return 0;
+  var r = FEATURE_RANGES[key], lo = r.min, hi = r.max;
+  var mag;
+  if (st.mode === 'anyvsnone') mag = v >= st.cutoff ? 1 : 0;
+  else if (st.mode === 'first') mag = (hi > lo) ? Math.log1p(Math.max(0, v - lo)) / Math.log1p(hi - lo) : 0;
+  else mag = (hi > lo) ? (v - lo) / (hi - lo) : 0;
+  return AMP[st.matters] * mag * (st.dir === 'favor' ? 1 : -1);
+}
+function condPass(key, patient) {
+  var c = model.features[key].cond;
+  if (!c.on) return true;
+  var w = patient[c.when];
+  return c.test === 'zero' ? w === 0 : c.test === 'nonzero' ? w !== 0 : w >= c.n;
+}
+function contrib(key, patient) { return condPass(key, patient) ? editValue(key, patient[key]) : 0; }
+
+function predictProb(a, b) {
+  var keys = FEATURES_DATA.map(function(f){ return f.key; });
+  if (model.aggregation === 'tally') {
+    var pa = 0, pb = 0;
+    keys.forEach(function(k) {
+      if (model.features[k].matters === 0) return;
+      var sa = contrib(k, a), sb = contrib(k, b);
+      if (Math.abs(sa - sb) < 1e-9) return;
+      if (sa > sb) pa++; else pb++;
+    });
+    return 1 / (1 + Math.exp(-TALLY_GAIN * (pa - pb)));
+  }
+  if (model.aggregation === 'prominent') {
+    var order = keys.slice().sort(function(x, y) { return AMP[model.features[y].matters] - AMP[model.features[x].matters]; });
+    for (var i = 0; i < order.length; i++) {
+      var k2 = order[i];
+      if (model.features[k2].matters === 0) continue;
+      var sa2 = contrib(k2, a), sb2 = contrib(k2, b);
+      if (Math.abs(sa2 - sb2) > 1e-9) return sa2 > sb2 ? 0.85 : 0.15;
+    }
+    return 0.5;
+  }
+  var z = 0;
+  keys.forEach(function(k) { z += contrib(k, a) - contrib(k, b); });
+  return 1 / (1 + Math.exp(-GAIN * z));
+}
+function predict(a, b) { return predictProb(a, b) > 0.5 ? 1 : 0; }
+
+function noun(key) {
+  var f = FEATURES_DATA.filter(function(x){ return x.key === key; })[0];
+  return f ? f.gap_phrase.replace(' gap', '') : key;
+}
+function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+// ── Strip charts: plot editValue(key, v) across the feature's range, so the
+// bars are a direct, literal picture of what the buttons below them mean —
+// this is the same function that decides real predictions, just visualized.
+function repValues(key) {
+  var r = FEATURE_RANGES[key], lo = r.min, hi = r.max, span = hi - lo;
+  var vals = [];
+  if (span <= 6) {
+    for (var v = lo; v <= hi; v++) vals.push(v);
+  } else {
+    var n = 6;
+    for (var i = 0; i < n; i++) {
+      var vv = Math.round(lo + span * i / (n - 1));
+      if (vals.indexOf(vv) === -1) vals.push(vv);
+    }
+  }
+  return vals;
+}
+function globalMax() {
+  var m = 0.0001;
+  FEATURES_DATA.forEach(function(f) {
+    repValues(f.key).forEach(function(v) { m = Math.max(m, Math.abs(editValue(f.key, v))); });
+  });
+  return m;
+}
+function drawStrip(key, gmax) {
+  var vals = repValues(key);
+  var Ws = 300, Hs = 132, padX = 14, baseY = 56, maxH = 40, labY = 100;
+  var n = vals.length, colW = (Ws - 2 * padX) / n;
+  var st = model.features[key];
+  var body = '';
+  vals.forEach(function(v, i) {
+    var cx = padX + colW * (i + 0.5);
+    var s = editValue(key, v);
+    var h = Math.min(maxH, Math.abs(s) / gmax * maxH);
+    if (st.matters === 0 || Math.abs(s) < 1e-6) {
+      body += '<rect x="' + (cx - 9).toFixed(1) + '" y="' + (baseY - 2) + '" width="18" height="4" rx="2" fill="var(--border-strong)"/>';
+    } else if (s > 0) {
+      body += '<rect x="' + (cx - 10).toFixed(1) + '" y="' + (baseY - h).toFixed(1) + '" width="20" height="' + h.toFixed(1) + '" rx="3" fill="var(--patient-a)"/>';
+    } else {
+      body += '<rect x="' + (cx - 10).toFixed(1) + '" y="' + baseY.toFixed(1) + '" width="20" height="' + h.toFixed(1) + '" rx="3" fill="var(--patient-b)"/>';
+    }
+    body += '<text x="' + cx.toFixed(1) + '" y="' + labY + '" text-anchor="middle" class="ts-axis">' + v + '</text>';
+  });
+  var overlay = st.matters === 0
+    ? '<text x="' + (Ws / 2) + '" y="' + (baseY + 20) + '" text-anchor="middle" class="ts-axis" style="font-style:italic">makes no difference</text>'
+    : '';
+  return '<svg class="stripchart" viewBox="0 0 ' + Ws + ' ' + Hs + '" role="img" aria-label="How ' + esc(noun(key)) + ' changes a patient\u2019s chances">'
+    + '<line x1="' + padX + '" y1="' + baseY + '" x2="' + (Ws - padX) + '" y2="' + baseY + '" stroke="var(--border-strong)" stroke-width="1"/>'
+    + body + overlay
+    + '<text x="' + padX + '" y="122" class="ts-axis">' + esc(noun(key)) + ' \u2192</text>'
+    + '</svg>';
+}
+
+function featureSentence(key) {
+  var st = model.features[key], r = FEATURE_RANGES[key];
+  if (st.matters === 0) return "You don't take " + noun(key) + " into account.";
+  var side = st.dir === 'favor' ? "in a patient's favor" : "against a patient";
+  var s;
+  if (st.mode === 'anyvsnone') {
+    s = (st.cutoff <= r.min + 1)
+      ? ("Having any " + noun(key) + " at all counts " + side + ".")
+      : ("Reaching " + st.cutoff + " or more " + noun(key) + " counts " + side + ", while less makes no difference.");
+  } else if (st.mode === 'first') {
+    s = "More " + noun(key) + " counts " + side + ", and the first bit matters the most.";
+  } else {
+    s = "More " + noun(key) + " counts " + side + ", with each additional bit mattering the same.";
+  }
+  if (st.cond.on) {
+    var cond = st.cond.test === 'zero' ? ('has no ' + noun(st.cond.when))
+             : st.cond.test === 'nonzero' ? ('has any ' + noun(st.cond.when))
+             : ('has at least ' + st.cond.n + ' ' + noun(st.cond.when));
+    s += ' This only applies when the patient ' + cond + '.';
+  }
+  return s;
+}
+function aggSentence(agg) {
+  if (agg === 'tally') return 'When choosing between two patients, you count how many factors favor each one, then pick whoever has more.';
+  if (agg === 'prominent') return 'When choosing between two patients, you pick whoever is favored by the single most important factor.';
+  return 'When choosing between two patients, you weigh how much each factor counts for or against each of them, then pick whoever comes out ahead overall.';
+}
+
+function matchCount() {
+  var n = 0;
+  pastScenarios.forEach(function(sc) {
+    var ch = predict(sc.A, sc.B) === 1 ? 'A' : 'B';
+    if (ch === sc.choice) n++;
+  });
+  return n;
+}
+
+// ── "See how your model performs" overlay: case browser + custom builder ────
+
+function confWord(prob) {
+  var d = Math.abs(prob - 0.5);
+  if (d >= 0.4) return 'very strongly';
+  if (d >= 0.25) return 'strongly';
+  if (d >= 0.15) return 'somewhat';
+  return 'weakly';
+}
+
+var tsCaseIdx = 0;
+
+function tsPredictions() {
+  return pastScenarios.map(function(sc) {
+    var prob = predictProb(sc.A, sc.B);
+    var modelChoice = prob > 0.5 ? 'A' : 'B';
+    return {sc: sc, prob: prob, modelChoice: modelChoice, agree: modelChoice === sc.choice};
+  });
+}
+
+function renderCaseGrid() {
+  var preds = tsPredictions();
+  var grid = document.getElementById('ts-case-grid');
+  grid.innerHTML = '';
+  preds.forEach(function(p, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ts-case-chip';
+    b.textContent = i + 1;
+    b.style.borderColor = i === tsCaseIdx ? 'var(--text-primary)' : 'transparent';
+    b.style.background = p.agree ? 'var(--patient-a-soft)' : 'var(--patient-b-soft)';
+    b.style.color = p.agree ? 'var(--patient-a)' : 'var(--patient-b)';
+    b.addEventListener('click', function() { tsCaseIdx = i; renderCaseGrid(); renderCaseDetail(); });
+    grid.appendChild(b);
+  });
+  document.getElementById('ts-case-total').textContent = preds.length;
+}
+
+function patientRows(patient) {
+  var html = '';
+  FEATURES_DATA.forEach(function(f) {
+    var bold = model.features[f.key].matters > 0;
+    html += '<div class="ts-prow" style="' + (bold ? 'font-weight:600;' : 'color:var(--text-secondary);') + '">'
+      + '<span>' + esc(f.label) + '</span><span>' + patient[f.key] + '</span></div>';
+  });
+  return html;
+}
+
+function renderCaseDetail() {
+  var preds = tsPredictions();
+  var host = document.getElementById('ts-case-detail');
+  if (!preds.length) { host.innerHTML = ''; return; }
+  var p = preds[tsCaseIdx];
+  var modelLabel = 'Patient ' + p.modelChoice + ' \u00b7 ' + confWord(p.modelChoice === 'A' ? p.prob : 1 - p.prob);
+
+  var html = '<div class="ts-case-card">';
+  html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">'
+    + '<div style="font-size:16px; font-weight:600;">Case ' + (tsCaseIdx + 1) + '</div>'
+    + '<div style="display:flex; gap:8px;">'
+    + '<button type="button" class="ts-btn" id="ts-case-prev">\u2190 Prev</button>'
+    + '<button type="button" class="ts-btn" id="ts-case-nextdis">Next disagreement</button>'
+    + '<button type="button" class="ts-btn" id="ts-case-next">Next \u2192</button>'
+    + '</div></div>';
+  html += '<div class="ts-grid">'
+    + '<div><div style="font-weight:600; color:var(--patient-a); margin-bottom:6px;">\u25cf Patient A</div>' + patientRows(p.sc.A) + '</div>'
+    + '<div><div style="font-weight:600; color:var(--patient-b); margin-bottom:6px;">\u25cf Patient B</div>' + patientRows(p.sc.B) + '</div>'
+    + '</div>';
+  html += '<div style="display:flex; gap:24px; align-items:center; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); flex-wrap:wrap;">'
+    + '<div><div style="font-size:12px; color:var(--text-muted);">You chose</div><div style="font-weight:600;">Patient ' + esc(p.sc.choice) + '</div></div>'
+    + '<div><div style="font-size:12px; color:var(--text-muted);">Your model would choose</div><div style="font-weight:600;">' + esc(modelLabel) + '</div></div>'
+    + '<div style="color:' + (p.agree ? 'var(--patient-a)' : 'var(--patient-b)') + '; font-weight:600;">'
+    + (p.agree ? '\u2713 matches your choice' : '\u2717 differs from your choice') + '</div>'
+    + '</div></div>';
+  host.innerHTML = html;
+
+  document.getElementById('ts-case-prev').addEventListener('click', function() {
+    tsCaseIdx = (tsCaseIdx - 1 + preds.length) % preds.length; renderCaseGrid(); renderCaseDetail();
+  });
+  document.getElementById('ts-case-next').addEventListener('click', function() {
+    tsCaseIdx = (tsCaseIdx + 1) % preds.length; renderCaseGrid(); renderCaseDetail();
+  });
+  document.getElementById('ts-case-nextdis').addEventListener('click', function() {
+    for (var i = 1; i <= preds.length; i++) {
+      var j = (tsCaseIdx + i) % preds.length;
+      if (!preds[j].agree) { tsCaseIdx = j; break; }
+    }
+    renderCaseGrid(); renderCaseDetail();
+  });
+}
+
+var tsBuilderVals = null;
+
+function renderBuilder() {
+  if (!tsBuilderVals) {
+    tsBuilderVals = {A: {}, B: {}};
+    FEATURES_DATA.forEach(function(f) {
+      var r = FEATURE_RANGES[f.key], mid = Math.round((r.min + r.max) / 2);
+      tsBuilderVals.A[f.key] = mid;
+      tsBuilderVals.B[f.key] = mid;
+    });
+  }
+  var host = document.getElementById('ts-builder');
+  var html = '<div class="ts-grid">';
+  ['A', 'B'].forEach(function(side) {
+    html += '<div><div style="font-weight:600; color:var(--patient-' + side.toLowerCase() + '); margin-bottom:8px;">\u25cf Patient ' + side + '</div>';
+    FEATURES_DATA.forEach(function(f) {
+      var r = FEATURE_RANGES[f.key];
+      html += '<div class="ts-slider-row"><div class="ts-slider-head"><span>' + esc(f.label) + '</span>'
+        + '<span id="ts-b-' + side + '-' + f.key + '-val" style="font-weight:600;">' + tsBuilderVals[side][f.key] + '</span></div>'
+        + '<input type="range" min="' + r.min + '" max="' + r.max + '" value="' + tsBuilderVals[side][f.key] + '" '
+        + 'data-side="' + side + '" data-key="' + f.key + '" style="width:100%;"></div>';
+    });
+    html += '</div>';
+  });
+  html += '</div><div id="ts-builder-verdict" class="ts-builder-card" style="margin-top:14px;"></div>';
+  host.innerHTML = html;
+
+  host.querySelectorAll('input[type=range]').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      var side = inp.getAttribute('data-side'), key = inp.getAttribute('data-key');
+      tsBuilderVals[side][key] = parseInt(inp.value, 10);
+      document.getElementById('ts-b-' + side + '-' + key + '-val').textContent = inp.value;
+      renderBuilderVerdict();
+    });
+  });
+  renderBuilderVerdict();
+}
+
+function renderBuilderVerdict() {
+  var a = tsBuilderVals.A, b = tsBuilderVals.B;
+  var prob = predictProb(a, b);
+  var ch = prob > 0.5 ? 'A' : 'B';
+  var conf = confWord(ch === 'A' ? prob : 1 - prob);
+  var html = '<div style="font-size:15px;">Your model would choose <b style="color:var(--patient-' + ch.toLowerCase() + ');">Patient ' + ch + '</b>, ' + conf + '.</div>';
+  var bits = [];
+  FEATURES_DATA.forEach(function(f) {
+    if (model.features[f.key].matters === 0) return;
+    var sa = contrib(f.key, a), sb = contrib(f.key, b);
+    if (Math.abs(sa - sb) < 1e-9) return;
+    var favored = sa > sb ? 'A' : 'B';
+    bits.push('<span>' + esc(f.label) + ': <b style="color:var(--patient-' + favored.toLowerCase() + ');">favours ' + favored + '</b></span>');
+  });
+  if (bits.length) {
+    html += '<div style="margin-top:8px; font-size:13px; color:var(--text-secondary); display:flex; gap:16px; flex-wrap:wrap;">' + bits.join('') + '</div>';
+  }
+  document.getElementById('ts-builder-verdict').innerHTML = html;
+}
+
+document.getElementById('ts-match-panel').addEventListener('click', function() {
+  document.getElementById('ts-modal-backdrop').style.display = 'flex';
+  tsCaseIdx = 0;
+  renderCaseGrid();
+  renderCaseDetail();
+  renderBuilder();
+});
+document.getElementById('ts-modal-close').addEventListener('click', function() {
+  document.getElementById('ts-modal-backdrop').style.display = 'none';
+});
+document.getElementById('ts-modal-backdrop').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') document.getElementById('ts-modal-backdrop').style.display = 'none';
+});
+
+function colorize(sentence) {
+  return esc(sentence)
+    .replace(/in a patient&#39;s favor|in a patient\u2019s favor/g, '<b class="favor">in a patient\u2019s favor</b>')
+    .replace(/against a patient/g, '<b class="against">against a patient</b>');
+}
+
+function renderSummary() {
+  var n = pastScenarios.length;
+  var current = n ? matchCount() : 0;
+  document.getElementById('ts-match-num').textContent = n ? current : '\u2013';
+  document.getElementById('ts-match-line').textContent = n
+    ? ('The current model reproduces your earlier choices in ' + current + ' of ' + n + ' cases.')
+    : '';
+  var subEl = document.getElementById('ts-match-sub');
+  if (BASELINE_MATCHES !== null && BASELINE_MATCHES !== current) {
+    subEl.textContent = "You've edited the model. It started at " + BASELINE_MATCHES + ' of ' + n + '.';
+  } else {
+    subEl.textContent = 'Tap to see how it does case by case, or try your own.';
+  }
+
+  var lines = FEATURES_DATA.map(function(f) { return featureSentence(f.key); });
+  lines.push(aggSentence(model.aggregation));
+  document.getElementById('ts-summary-text').innerHTML = lines.map(colorize).join(' ');
+}
+
+function renderFeatures() {
+  var host = document.getElementById('ts-features');
+  host.innerHTML = '';
+  var gmax = globalMax();
+  FEATURES_DATA.forEach(function(f) {
+    var st = model.features[f.key];
+    var r = FEATURE_RANGES[f.key];
+    var card = document.createElement('div');
+    card.className = 'ts-card' + (st.matters === 0 ? ' ts-off' : '');
+
+    var badgeCls = st.matters === 0 ? 'none' : st.dir;
+    var badgeTxt = st.matters === 0 ? 'No effect' : (st.dir === 'favor' ? '\u2191 Helps them' : '\u2193 Counts against');
+    var html = '<div class="ts-fhead"><div class="ts-fname">' + esc(f.label) + '</div>'
+      + '<div class="ts-badge ' + badgeCls + '">' + badgeTxt + '</div></div>';
+    html += '<div class="ts-fdesc">' + esc(featureSentence(f.key)) + '</div>';
+    html += drawStrip(f.key, gmax);
+    html += '<hr class="ts-divider">';
+
+    if (!FINAL_MODE) html += '<div class="ts-controls-label">Here\u2019s where you can make changes:</div>';
+    html += '<div class="ts-row"><span class="lab">More ' + esc(noun(f.key)) + '\u2026</span><div class="ts-btns">'
+      + btn('dir', f.key, 'favor', 'Helps them', st.dir === 'favor' && st.matters > 0)
+      + btn('dir', f.key, 'against', 'Counts against', st.dir === 'against' && st.matters > 0)
+      + btn('dir', f.key, 'none', 'No effect', st.matters === 0)
+      + '</div></div>';
+
+    if (st.matters > 0) {
+      html += '<div class="ts-row"><span class="lab">Shape</span><div class="ts-btns">'
+        + btn('mode', f.key, 'anyvsnone', 'Only past a point', st.mode === 'anyvsnone')
+        + btn('mode', f.key, 'first', 'First counts most', st.mode === 'first')
+        + btn('mode', f.key, 'steady', 'Every bit counts the same', st.mode === 'steady')
+        + '</div></div>';
+      if (st.mode === 'anyvsnone') {
+        html += '<div class="ts-row"><span class="lab">Cutoff</span>'
+          + '<input class="ts-cutoff" type="number" min="' + (r.min + 1) + '" max="' + r.max + '" '
+          + 'value="' + st.cutoff + '" data-cutoff="' + f.key + '"' + (FINAL_MODE ? ' disabled' : '') + '></div>';
+      }
+      html += '<div class="ts-row"><span class="lab">Strength</span><div class="ts-btns">'
+        + btn('str', f.key, '1', 'A little', st.matters === 1)
+        + btn('str', f.key, '2', 'Somewhat', st.matters === 2)
+        + btn('str', f.key, '3', 'A lot', st.matters === 3)
+        + '</div></div>';
+    }
+    card.innerHTML = html;
+    host.appendChild(card);
+  });
+
+  if (!FINAL_MODE) {
+    host.querySelectorAll('[data-dir]').forEach(function(b) {
+      b.addEventListener('click', function() {
+        var key = b.getAttribute('data-key'), val = b.getAttribute('data-dir');
+        var st = model.features[key];
+        if (val === 'none') { st.matters = 0; }
+        else { if (st.matters === 0) st.matters = 2; st.dir = val; }
+        refresh();
+      });
+    });
+    host.querySelectorAll('[data-mode]').forEach(function(b) {
+      b.addEventListener('click', function() {
+        model.features[b.getAttribute('data-key')].mode = b.getAttribute('data-mode');
+        refresh();
+      });
+    });
+    host.querySelectorAll('[data-str]').forEach(function(b) {
+      b.addEventListener('click', function() {
+        model.features[b.getAttribute('data-key')].matters = parseInt(b.getAttribute('data-str'), 10);
+        refresh();
+      });
+    });
+    host.querySelectorAll('[data-cutoff]').forEach(function(inp) {
+      inp.addEventListener('change', function() {
+        var v = parseInt(inp.value, 10);
+        if (!isNaN(v)) model.features[inp.getAttribute('data-cutoff')].cutoff = v;
+        refresh();
+      });
+    });
+  }
+}
+function btn(kind, key, val, label, active) {
+  var attr = kind === 'dir' ? 'data-dir' : kind === 'mode' ? 'data-mode' : 'data-str';
+  var colorCls = (kind === 'dir' && active && (val === 'favor' || val === 'against')) ? (' ' + val) : '';
+  return '<button type="button" class="ts-btn' + (active ? ' active' + colorCls : '') + '" data-key="' + key + '" ' + attr + '="' + val + '"'
+    + (FINAL_MODE ? ' disabled' : '') + '>' + esc(label) + '</button>';
+}
+
+function renderAgg() {
+  var host = document.getElementById('ts-agg');
+  host.innerHTML = '';
+  var opts = [
+    {val: 'weighted', t: 'Add up how much each factor counts', d: 'Takes into account how much each factor differs, not just which side it favors.'},
+    {val: 'tally', t: 'Count how many factors favor each patient', d: 'Whoever has more factors in their favor wins — the size of each difference is ignored.'},
+    {val: 'prominent', t: 'Let the most important factor decide', d: 'Whichever patient the single most important factor favors wins.'}
+  ];
+  opts.forEach(function(o) {
+    var el = document.createElement('div');
+    el.className = 'ts-agg-card' + (model.aggregation === o.val ? ' active' : '');
+    el.innerHTML = '<div class="ts-agg-title">' + esc(o.t) + '</div><div class="ts-agg-desc">' + esc(o.d) + '</div>';
+    if (!FINAL_MODE) {
+      el.addEventListener('click', function() { model.aggregation = o.val; refresh(); });
+    }
+    host.appendChild(el);
+  });
+}
+
+function refresh() {
+  renderFeatures();
+  renderAgg();
+  renderSummary();
+  var resetBtn = document.getElementById('ts-reset');
+  if (resetBtn) resetBtn.style.display = '';
+}
+
+if (!FINAL_MODE) {
+  document.getElementById('ts-apply').addEventListener('click', function() {
+    var btn2 = document.getElementById('ts-apply');
+    btn2.disabled = true; btn2.textContent = 'Saving\u2026';
+    fetch(APPLY_URL, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model: model})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data && data.redirect) window.location.href = data.redirect;
+      else { btn2.disabled = false; btn2.textContent = 'Apply changes'; }
+    }).catch(function() { btn2.disabled = false; btn2.textContent = 'Apply changes \u2014 try again'; });
+  });
+  document.getElementById('ts-reset').addEventListener('click', function() {
+    if (!confirm('Reset to the original model trained from your answers? This discards your edits.')) return;
+    fetch(RESET_URL, {method: 'POST'}).then(function(r){ return r.json(); }).then(function(data){
+      if (data && data.redirect) window.location.href = data.redirect;
+    });
+  });
+
+  var row = document.getElementById('ts-score-row');
+  for (var i = 1; i <= 7; i++) {
+    (function(score) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ts-btn' + (currentScore === score ? ' active' : '');
+      b.style.flex = '1';
+      b.textContent = String(score);
+      b.addEventListener('click', function() {
+        currentScore = score;
+        Array.prototype.forEach.call(row.children, function(c, idx) { c.classList.toggle('active', idx + 1 === score); });
+        fetch(RATE_URL, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({score: score})}).catch(function(){});
+      });
+      row.appendChild(b);
+    })(i);
+  }
+  document.getElementById('ts-continue').addEventListener('click', function() {
+    window.location.href = CONTINUE_URL;
+  });
+}
+
+refresh();
+</script>
+{% endblock %}

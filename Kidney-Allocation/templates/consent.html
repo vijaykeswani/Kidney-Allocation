@@ -31,7 +31,7 @@
 
 <div class="spacer-24"></div>
 
-<form method="post" action="{{ url_for('give_consent') }}">
+<form method="post" action="{{ url_for('give_consent', model=preselected_model) }}">
   <label class="consent-check">
     <input type="checkbox" name="age_confirmed" id="chk-age">
     <span>I confirm that I am <strong>18 years of age or older</strong>.</span>

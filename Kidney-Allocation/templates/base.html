@@ -13,6 +13,11 @@
   --a:#b91c1c; --a-soft:#fef2f2; --b:#1d4ed8; --b-soft:#eff6ff;
   --success:#15803d; --success-soft:#f0fdf4;
   --warning:#b45309; --warning-soft:#fffbeb;
+  /* Aliases so twostage.html, which uses the tree editor's token names,
+     resolves to the same colors as every other page. */
+  --patient-a: var(--a); --patient-a-soft: var(--a-soft);
+  --patient-b: var(--b); --patient-b-soft: var(--b-soft);
+  --text-primary: var(--text);
 }
 *{box-sizing:border-box;}
 html,body{background:var(--bg); color:var(--text); margin:0;

@@ -30,6 +30,26 @@ pattern in your choices, and you can tell us if it feels right.</p>
 {% endif %}
 
 <form method="post" action="{{ url_for('do_start') }}">
+  {% if preselected_model %}
+  <input type="hidden" name="model_type" value="{{ preselected_model }}">
+  {% else %}
+  <strong>Which version of the model would you like to try?</strong>
+  <div class="spacer-16"></div>
+  <div style="display:flex; gap:16px; margin-bottom:20px;">
+    <label style="flex:1; border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
+      <input type="radio" name="model_type" value="fft" checked> <strong>Decision tree</strong>
+      <div class="muted" style="font-size:14px; margin-top:4px;">
+        An ordered checklist of yes/no questions, each one deciding the case immediately if it applies.
+      </div>
+    </label>
+    <label style="flex:1; border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
+      <input type="radio" name="model_type" value="twostage"> <strong>Feature list</strong>
+      <div class="muted" style="font-size:14px; margin-top:4px;">
+        Every factor is weighed on its own, then combined into one overall answer.
+      </div>
+    </label>
+  </div>
+  {% endif %}
   <strong>What should we call you?</strong>
   <div class="spacer-16"></div>
   <input type="text" name="username" placeholder="Enter your name to begin" autofocus>

@@ -19,6 +19,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 import db
 import features
 import tiebreaker
+import twostage_model
 from fft_model import train_fft, FastFrugalTree, build_difference_features, augment, feature_row
 from fft_component import fft_svg_explained, DEFAULT_FFT_PALETTE, PARAM_DIRECTION_LABELS
 
@@ -217,10 +218,20 @@ def record_decision(field, choice, idx, scenarios, csv_suffix):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+MODEL_TYPES = ("fft", "twostage")
+
+
+def _requested_model():
+    """`?model=fft|twostage` on a study link preselects the model type;
+    anything else leaves it unset so the start page shows the picker."""
+    model_type = request.args.get("model")
+    return model_type if model_type in MODEL_TYPES else None
+
+
 @app.route("/")
 def start():
     # Consent page always shown — no session check so every new visit requires consent.
-    return render_template("consent.html")
+    return render_template("consent.html", preselected_model=_requested_model())
 
 
 @app.route("/consent", methods=["POST"])
@@ -229,7 +240,7 @@ def give_consent():
     consent_ok = request.form.get("consent_confirmed")
     if age_ok and consent_ok:
         session.clear()
-    return redirect(url_for("intro"))
+    return redirect(url_for("intro", model=_requested_model()))
 
 
 @app.route("/intro")
@@ -239,19 +250,25 @@ def intro():
         features=FEATURES,
         descriptions=PARAM_DESCRIPTIONS,
         feature_labels=FEATURE_LABELS,
+        preselected_model=_requested_model(),
     )
 
 
 @app.route("/start", methods=["POST"])
 def do_start():
     name = (request.form.get("username") or "").strip()
+    model_type = request.form.get("model_type")
+    if model_type not in MODEL_TYPES:
+        model_type = "fft"
     if len(name) < 2:
         return render_template(
             "start.html", features=FEATURES, descriptions=PARAM_DESCRIPTIONS,
-            feature_labels=FEATURE_LABELS,
+            feature_labels=FEATURE_LABELS, preselected_model=model_type,
             error="Enter at least 2 characters to continue.",
         )
     session["username"] = name
+    session["model_type"] = model_type
+    db.set_model_type(name, model_type)
 
     users, rec = get_user_record()
     if "part1_scenarios" not in rec:
@@ -265,6 +282,18 @@ def do_start():
     save_user_record(rec)
 
     return redirect(url_for("questionnaire", part=1))
+
+
+def _model_type():
+    """The current user's model type — session first (fast path), falling
+    back to the DB (e.g. after a server restart clears sessions)."""
+    if "model_type" in session:
+        return session["model_type"]
+    if "username" in session:
+        mt = db.get_model_type(session["username"])
+        session["model_type"] = mt
+        return mt
+    return "fft"
 
 
 def _require_user():
@@ -409,6 +438,9 @@ def results():
     guard = _require_user()
     if guard:
         return guard
+    if _model_type() == "twostage":
+        return _twostage_results()
+
     users, rec = get_user_record()
     override = load_fft_override(session["username"])
     stats, decisions = _train_for(rec, "part1", override)
@@ -457,6 +489,54 @@ def results():
     )
 
 
+def _twostage_results():
+    """Two-stage model's version of /results — separate render path, reusing
+    the same session/rating/tutorial plumbing as the tree."""
+    users, rec = get_user_record()
+    decisions = [d for d in rec.get("part1", []) if d.get("choice") in ("A", "B")]
+    override = load_fft_override(session["username"])
+    stats, err = twostage_model.train_twostage(decisions, override=override)
+
+    if stats is None:
+        return render_template("not_ready.html", n_decisions=len(decisions))
+
+    # If the model has been edited, "started at X of 20" needs the freshly-
+    # trained (un-edited) model's match count too — cheap enough to just
+    # train it a second time rather than caching, given how few decisions
+    # this ever runs against.
+    baseline_matches = stats["n_matches"]
+    if override:
+        baseline_stats, _ = twostage_model.train_twostage(decisions, override=None)
+        if baseline_stats:
+            baseline_matches = baseline_stats["n_matches"]
+
+    username = session["username"]
+    views = db.get_tutorial_seen_count(username)
+    tutorial_mode = "full" if views == 0 else ("reminder" if views == 2 else "")
+    db.bump_tutorial_seen_count(username)
+
+    return render_template(
+        "twostage.html",
+        final_mode=False,
+        apply_url=url_for("apply_edit"),
+        reset_url=url_for("reset_edit"),
+        rate_url=url_for("rate"),
+        continue_url=url_for("part2_intro"),
+        tutorial_seen_url=url_for("tutorial_seen"),
+        current_score=rec.get("alignment_score"),
+        has_override=bool(override),
+        model_json=stats["model"],
+        n_matches=stats["n_matches"],
+        n_total=stats["n_total"],
+        baseline_matches=baseline_matches,
+        summary_text=stats["summary"],
+        past_scenarios_json=_scenarios_for_audit(decisions),
+        feature_ranges_json=_feature_ranges(),
+        features_json=features.FEATURES_DATA,
+        tutorial_mode=tutorial_mode,
+    )
+
+
 def _feature_ranges():
     """Per-feature (min, max, step) from FEATURE_RANGES — bounds the sliders."""
     out = {}
@@ -487,11 +567,20 @@ def apply_edit():
     if guard:
         return jsonify({"error": "not logged in"}), 401
     payload = request.get_json(force=True, silent=True) or {}
+    username = session["username"]
+
+    if _model_type() == "twostage":
+        model = payload.get("model")
+        if not model:
+            return jsonify({"error": "missing model"}), 400
+        save_fft_override(username, model)  # same override column, holds either schema
+        version = db.bump_model_version(username)
+        db.log_event(username, "model_edit_applied", {"model_version": version, "type": "twostage"})
+        return jsonify({"ok": True, "redirect": url_for("results")})
+
     tree = payload.get("tree")
     if not tree:
         return jsonify({"error": "missing tree"}), 400
-
-    username = session["username"]
 
     # Backstop for the browser-side limit. `baseline_node_count` is what the
     # page was opened with; anything beyond it plus the cap is rejected rather
@@ -714,6 +803,9 @@ def final():
     guard = _require_user()
     if guard:
         return guard
+    if _model_type() == "twostage":
+        return _twostage_final()
+
     users, rec = get_user_record()
     override = load_fft_override(session["username"])
 
@@ -735,6 +827,35 @@ def final():
         summary_explanation=stats.get("summary_explanation"),
     )
     return render_template("final.html", svg=svg)
+
+
+def _twostage_final():
+    users, rec = get_user_record()
+    override = load_fft_override(session["username"])
+    all_decisions = (
+        [d for d in rec.get("part1", []) if d.get("choice") in ("A", "B")]
+        + [d for d in rec.get("part2", []) if d.get("choice") in ("A", "B")]
+    )
+    if len(all_decisions) < 6:
+        return render_template("not_ready.html", n_decisions=len(all_decisions))
+    stats, err = twostage_model.train_twostage(all_decisions, override=override)
+    if stats is None:
+        return render_template("not_ready.html", n_decisions=len(all_decisions))
+    return render_template(
+        "twostage.html",
+        final_mode=True,
+        apply_url="", reset_url="", rate_url="", continue_url="", tutorial_seen_url="",
+        current_score=None, has_override=False,
+        model_json=stats["model"],
+        n_matches=stats["n_matches"],
+        n_total=stats["n_total"],
+        baseline_matches=stats["n_matches"],
+        summary_text=stats["summary"],
+        past_scenarios_json=_scenarios_for_audit(all_decisions),
+        feature_ranges_json=_feature_ranges(),
+        features_json=features.FEATURES_DATA,
+        tutorial_mode="",
+    )
 
 
 if __name__ == "__main__":
