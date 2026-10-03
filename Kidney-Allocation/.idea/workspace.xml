@@ -5,7 +5,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="3914fe2b-b722-4705-af01-5732985e27a9" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/fft_component.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/fft_model.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/fft_tree.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/final.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/model.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/review.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/twostage.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test_label_discrepancy.py" beforeDir="false" afterPath="$PROJECT_DIR$/test_label_discrepancy.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tiebreaker.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/twostage_model.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -69,16 +80,5 @@
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/app.py</url>
-          <line>489</line>
-          <option name="timeStamp" value="1" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>

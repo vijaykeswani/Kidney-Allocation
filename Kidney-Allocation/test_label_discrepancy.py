@@ -16,7 +16,7 @@ import re
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)
 
-from fft_component import outcome_label, _default_outcome_label, fft_svg_explained, DEFAULT_FFT_PALETTE
+from decision_tree.fft_component import outcome_label, _default_outcome_label, fft_svg_explained, DEFAULT_FFT_PALETTE
 
 BAD_STRINGS = ["Prefer A", "Prefer B"]
 

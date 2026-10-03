@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="{{ url_for('static', filename='fft_tree.js') }}"></script>
+<script src="{{ url_for('decision_tree.static', filename='fft_tree.js') }}"></script>
 <style>
 /* ── Design tokens ──────────────────────────────────────────────────
    Single source of truth for color, type and spacing. Introduced because
@@ -1173,7 +1173,7 @@ function getSVGScale() {
 }
 
 // ── SVG builder ────────────────────────────────────────────────────
-// Layout and drawing now live in static/fft_tree.js, which renders the model
+// Layout and drawing now live in fft/static/fft_tree.js, which renders the model
 // as a conventional top-down decision tree. This file keeps ownership of the
 // wording (labels, explanations, units) and hands it to the renderer as
 // helpers, so the renderer stays purely about geometry.

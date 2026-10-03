@@ -9,10 +9,35 @@ Then open http://127.0.0.1:5000
 Notes on running it:
 - `FLASK_SECRET_KEY` must be set (via env var or a `.env` file — `python-dotenv` is loaded
   at startup). There's no fallback default anymore.
-- `static/fft_tree.js` is served automatically by Flask's default static handling — no
-  extra config needed, just keep it next to `app.py` in a `static/` folder.
+- `fft/static/fft_tree.js` is served at `/fft/static/fft_tree.js` by the `fft` blueprint -
+  no extra config needed.
 - Optional: set `FFT_TIEBREAKER=1` to turn on the experimental multi-step tie-breaker
-  (`tiebreaker.py`) for ambiguous predictions in the trial/review flow; off by default.
+  (`fft/tiebreaker.py`) for ambiguous predictions in the trial/review flow; off by default.
+
+## Project layout
+Each model has its own folder, so changing one cannot touch the other. Everything a
+participant sees is the same as before the split; only file locations changed.
+
+    app.py, db.py, features.py/.json   shared: routes, database, feature definitions
+    templates/                         shared pages: base, consent, start,
+                                       questionnaire, not_ready
+    fft/                               Fast-and-Frugal Tree (decision tree)
+        fft_model.py, fft_component.py, tiebreaker.py
+        templates/  model.html, review.html, final.html
+        static/     fft_tree.js
+    twostage/                          two-stage (feature list) model
+        twostage_model.py
+        templates/  twostage.html
+
+Each folder is a Flask blueprint (see its `__init__.py`), registered in `app.py`. That only
+makes the folder's `templates/` and `static/` visible: template names are unchanged, so
+`render_template("model.html")` still works. Template names must therefore stay unique
+across folders. Participants pick a model on the start page, or a study link with
+`?model=fft` / `?model=twostage` picks it for them; the choice is stored in
+`users.model_type`.
+
+Older notes below name files by their bare names (`fft_model.py`, `model.html`); they now
+live in the folders above.
 
 ## Latest UI changes (this pass)
 - **Insert-step bug, fixed properly**: "Add a rule after this step" (leaf panel) now inserts a
@@ -199,7 +224,7 @@ model makes the same choice as you":
 3. `/results`              — the model, unified view/edit page (see below)
 4. `/questionnaire/2`      — 10 more scenarios, then `/final` shows the retrained model
 
-## `/results`: unified view/edit page (`templates/model.html`)
+## `/results`: unified view/edit page (`fft/templates/model.html`)
 The tree is rendered entirely client-side (ported from the old `index.html` component),
 so viewing and editing are the same page/DOM — clicking "✎ Edit the model" just flips a
 mode flag and re-renders with edit affordances (pencil icons, dashed borders, reorder
