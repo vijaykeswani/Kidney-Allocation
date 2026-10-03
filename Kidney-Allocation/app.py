@@ -45,8 +45,9 @@ FEATURE_LABELS = {k: v["label"] for k, v in features.FEATURE_BY_KEY.items()}
 
 PART1_N = 20
 PART2_N = 10
+CONTROL_EXTRA_N = 20  # control arm: extra scenarios instead of seeing/editing a model
 
-MODEL_TYPES = ("fft", "twostage")
+MODEL_TYPES = ("fft", "twostage", "twostage_v2", "control")
 
 db.init_db(FEATURES)
 
@@ -234,7 +235,10 @@ def do_start():
         rec["part1"] = []
         rec["part1_index"] = 0
     if "part2_scenarios" not in rec:
-        rec["part2_scenarios"] = shuffle_scenarios(generate_scenarios(PART2_N))
+        # Control arm never sees a model, so instead of the short "does the
+        # model still match you" check-in, it gets extra scenarios here.
+        n2 = CONTROL_EXTRA_N if model_type == "control" else PART2_N
+        rec["part2_scenarios"] = shuffle_scenarios(generate_scenarios(n2))
         rec["part2"] = []
         rec["part2_index"] = 0
     db.save_user_record(name, rec)
@@ -252,14 +256,23 @@ def questionnaire(part):
     idx = rec.get(f"part{part}_index", 0)
     n_total = len(scenarios)
 
+    is_control = _model_type() == "control"
+
     if idx >= n_total:
-        return redirect(url_for("results") if part == 1 else url_for("final"))
+        if part == 1:
+            return redirect(url_for("questionnaire", part=2) if is_control else url_for("results"))
+        return redirect(url_for("done") if is_control else url_for("final"))
 
     heading = "Which patient should receive the organ?" if part == 1 else "Part 2: A few more scenarios"
-    subheading = None if part == 1 else (
-        "Now that you've seen your model, here are a few more pairs in the same "
-        "format. This checks whether the model still matches how you'd actually choose."
-    )
+    if part == 1:
+        subheading = None
+    elif is_control:
+        subheading = "Here are some more pairs in the same format — just keep choosing as you have been."
+    else:
+        subheading = (
+            "Now that you've seen your model, here are a few more pairs in the same "
+            "format. This checks whether the model still matches how you'd actually choose."
+        )
     return render_template(
         "questionnaire.html",
         part=part, idx=idx, n_total=n_total,
@@ -292,6 +305,15 @@ def part2_intro():
     return redirect(url_for("questionnaire", part=2))
 
 
+@app.route("/done")
+def done():
+    """Terminal page for the control arm — no model to show, just a thank-you."""
+    guard = _require_user()
+    if guard:
+        return guard
+    return render_template("done.html")
+
+
 # ── Model-section dispatch routes ─────────────────────────────────────────────
 # Each route inspects the session model type and delegates to the appropriate
 # section handler. No section-specific logic lives in this file.
@@ -301,7 +323,12 @@ def results():
     guard = _require_user()
     if guard:
         return guard
-    if _model_type() == "twostage":
+    mt = _model_type()
+    if mt == "control":
+        return redirect(url_for("questionnaire", part=2))
+    if mt == "twostage_v2":
+        return fl_handlers.results_view_v2()
+    if mt == "twostage":
         return fl_handlers.results_view()
     return dt_handlers.results_view()
 
@@ -311,7 +338,12 @@ def final():
     guard = _require_user()
     if guard:
         return guard
-    if _model_type() == "twostage":
+    mt = _model_type()
+    if mt == "control":
+        return redirect(url_for("done"))
+    if mt == "twostage_v2":
+        return fl_handlers.final_view_v2()
+    if mt == "twostage":
         return fl_handlers.final_view()
     return dt_handlers.final_view()
 
@@ -338,7 +370,7 @@ def apply_edit():
         return jsonify({"error": "not logged in"}), 401
     payload = request.get_json(force=True, silent=True) or {}
     username = session["username"]
-    if _model_type() == "twostage":
+    if _model_type() in ("twostage", "twostage_v2"):
         data, code = fl_handlers.apply_edit_handler(username, payload)
     else:
         data, code = dt_handlers.apply_edit_handler(username, payload)

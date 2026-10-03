@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 {% block extra_head %}
 <style>
+/* Pinned here rather than relying on base.html's tokens: this page needs
+   teal (Patient A) / orange (Patient B) specifically, and that's drifted
+   back to red/blue at least once already when base.html was touched
+   elsewhere. Defining it locally means this page's colors can't be moved
+   by an edit somewhere else in the template inheritance chain. */
+:root {
+  --patient-a: #0f766e !important; --patient-a-soft: #d8ecea !important;
+  --patient-b: #b1622f !important; --patient-b-soft: #f6e7dd !important;
+}
 .ts-step-title { font-size: 1.4rem; font-weight: 600; margin: 26px 0 4px; font-family: var(--font-serif, serif); }
 .ts-step-sub { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
 .ts-legend { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }
@@ -42,6 +51,9 @@
 .ts-btn.active.favor { background: var(--patient-a); border-color: var(--patient-a); }
 .ts-btn.active.against { background: var(--patient-b); border-color: var(--patient-b); }
 .ts-cutoff { width: 70px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); }
+.ts-strength-slider-row { align-items: center; gap: 10px; margin-top: -2px; }
+.ts-strength-slider { flex: 1; max-width: 220px; accent-color: var(--accent); }
+.ts-strength-val { font-size: 12.5px; color: var(--text-muted); min-width: 24px; }
 .ts-sentence { font-size: 14px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
 .ts-off { opacity: .7; }
 
@@ -204,6 +216,15 @@ var BASELINE_MATCHES = {{ baseline_matches | tojson }};
 var AMP = [0, 1.0, 2.0, 3.2];
 var GAIN = 0.9, TALLY_GAIN = 0.95;
 
+// Mirrors twostage_model._amp_for in Python exactly.
+function ampFor(matters) {
+  if (matters <= 0) return 0;
+  if (matters <= 1) return AMP[1] * matters;
+  if (matters >= 3) return AMP[3];
+  if (matters <= 2) return AMP[1] + (AMP[2] - AMP[1]) * (matters - 1);
+  return AMP[2] + (AMP[3] - AMP[2]) * (matters - 2);
+}
+
 function editValue(key, v) {
   var st = model.features[key];
   if (!st || st.matters === 0) return 0;
@@ -212,7 +233,7 @@ function editValue(key, v) {
   if (st.mode === 'anyvsnone') mag = v >= st.cutoff ? 1 : 0;
   else if (st.mode === 'first') mag = (hi > lo) ? Math.log1p(Math.max(0, v - lo)) / Math.log1p(hi - lo) : 0;
   else mag = (hi > lo) ? (v - lo) / (hi - lo) : 0;
-  return AMP[st.matters] * mag * (st.dir === 'favor' ? 1 : -1);
+  return ampFor(st.matters) * mag * (st.dir === 'favor' ? 1 : -1);
 }
 function condPass(key, patient) {
   var c = model.features[key].cond;
@@ -235,7 +256,7 @@ function predictProb(a, b) {
     return 1 / (1 + Math.exp(-TALLY_GAIN * (pa - pb)));
   }
   if (model.aggregation === 'prominent') {
-    var order = keys.slice().sort(function(x, y) { return AMP[model.features[y].matters] - AMP[model.features[x].matters]; });
+    var order = keys.slice().sort(function(x, y) { return ampFor(model.features[y].matters) - ampFor(model.features[x].matters); });
     for (var i = 0; i < order.length; i++) {
       var k2 = order[i];
       if (model.features[k2].matters === 0) continue;
@@ -547,7 +568,7 @@ function renderFeatures() {
     card.className = 'ts-card' + (st.matters === 0 ? ' ts-off' : '');
 
     var badgeCls = st.matters === 0 ? 'none' : st.dir;
-    var badgeTxt = st.matters === 0 ? 'No effect' : (st.dir === 'favor' ? '\u2191 Helps them' : '\u2193 Counts against');
+    var badgeTxt = st.matters === 0 ? 'No effect' : (st.dir === 'favor' ? '\u2191 Helps them' : '\u2193 Counts against a patient');
     var html = '<div class="ts-fhead"><div class="ts-fname">' + esc(f.label) + '</div>'
       + '<div class="ts-badge ' + badgeCls + '">' + badgeTxt + '</div></div>';
     html += '<div class="ts-fdesc">' + esc(featureSentence(f.key)) + '</div>';
@@ -573,10 +594,15 @@ function renderFeatures() {
           + 'value="' + st.cutoff + '" data-cutoff="' + f.key + '"' + (FINAL_MODE ? ' disabled' : '') + '></div>';
       }
       html += '<div class="ts-row"><span class="lab">Strength</span><div class="ts-btns">'
-        + btn('str', f.key, '1', 'A little', st.matters === 1)
-        + btn('str', f.key, '2', 'Somewhat', st.matters === 2)
-        + btn('str', f.key, '3', 'A lot', st.matters === 3)
+        + btn('str', f.key, '1', 'A little', Math.abs(st.matters - 1) < 0.05)
+        + btn('str', f.key, '2', 'Somewhat', Math.abs(st.matters - 2) < 0.05)
+        + btn('str', f.key, '3', 'A lot', Math.abs(st.matters - 3) < 0.05)
         + '</div></div>';
+      html += '<div class="ts-row ts-strength-slider-row">'
+        + '<input type="range" class="ts-strength-slider" min="1" max="3" step="0.1" '
+        + 'value="' + st.matters + '" data-key="' + f.key + '"' + (FINAL_MODE ? ' disabled' : '') + '>'
+        + '<span class="ts-strength-val">' + st.matters.toFixed(1) + '</span>'
+        + '</div>';
     }
     card.innerHTML = html;
     host.appendChild(card);
@@ -601,6 +627,12 @@ function renderFeatures() {
     host.querySelectorAll('[data-str]').forEach(function(b) {
       b.addEventListener('click', function() {
         model.features[b.getAttribute('data-key')].matters = parseInt(b.getAttribute('data-str'), 10);
+        refresh();
+      });
+    });
+    host.querySelectorAll('.ts-strength-slider').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        model.features[inp.getAttribute('data-key')].matters = parseFloat(inp.value);
         refresh();
       });
     });

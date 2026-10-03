@@ -1,57 +1,90 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="eyebrow">SURA 2026 · IIT Delhi</div>
-<div class="spacer-14"></div>
 <h1>Organ allocation preference study</h1>
 <div class="spacer-14"></div>
 
-<p>You'll see <strong>pairs of patients</strong> who each need an organ transplant, and choose
-who you think should receive it. There's no right or wrong answer here — we're learning how
-<em>you</em> reason through it. Afterwards, we'll show you a simple model that captures the
-pattern in your choices, and you can tell us if it feels right.</p>
+<p>
+  Kidneys for transplant are always scarcer than the patients who need them, so someone has to
+  decide who receives one when it becomes available. This study looks at how people make that
+  kind of call — not to find a "correct" answer, but to see whether we can build a simple model
+  that captures the pattern in <em>your</em> choices.
+</p>
 
-<div class="spacer-24"></div>
-<div class="eyebrow">Each patient is described by five factors</div>
-<div class="spacer-16"></div>
+<div style="height:20px"></div>
 
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 24px;">
-  {% for p in features %}
-  <div>
-    <strong>{{ feature_labels.get(p, p.replace('_',' ')|title) }}</strong> —
-    <span class="muted">{{ descriptions.get(p, '') }}</span>
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px;">
+  <div class="muted" style="font-size:13px; font-weight:600; margin-bottom:10px;">
+    What a comparison looks like
   </div>
-  {% endfor %}
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px; font-size:14px;">
+    <div><strong>Patient A</strong></div>
+    <div><strong>Patient B</strong></div>
+    <div class="muted">3 years waiting · 2 dependents</div>
+    <div class="muted">1 year waiting · 0 dependents</div>
+  </div>
+  <div class="muted" style="font-size:13px; margin-top:10px;">You'll pick which patient should receive the kidney — twenty times in a row.</div>
 </div>
+
+<div style="height:20px"></div>
+
+<details>
+  <summary style="cursor:pointer; font-size:14px; color:var(--text-secondary);">What factors describe each patient?</summary>
+  <div style="height:12px"></div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; font-size:14px;">
+    {% for p in features %}
+    <div>
+      <strong>{{ feature_labels.get(p, p.replace('_',' ')|title) }}</strong> —
+      <span class="muted">{{ descriptions.get(p, '') }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</details>
 
 <div class="spacer-28"></div>
 
 {% if error %}
 <div class="alert alert-error">{{ error }}</div>
+<div class="spacer-16"></div>
 {% endif %}
 
 <form method="post" action="{{ url_for('do_start') }}">
   {% if preselected_model %}
   <input type="hidden" name="model_type" value="{{ preselected_model }}">
   {% else %}
-  <strong>Which version of the model would you like to try?</strong>
-  <div class="spacer-16"></div>
-  <div style="display:flex; gap:16px; margin-bottom:20px;">
-    <label style="flex:1; border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
+  <strong>Which version would you like to try?</strong>
+  <div style="height:8px"></div>
+  <p class="muted" style="font-size:13.5px; margin:0 0 14px;">
+    After the first twenty scenarios, what happens next depends on which version you pick below.
+  </p>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:22px;">
+    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
       <input type="radio" name="model_type" value="fft" checked> <strong>Decision tree</strong>
-      <div class="muted" style="font-size:14px; margin-top:4px;">
-        An ordered checklist of yes/no questions, each one deciding the case immediately if it applies.
+      <div class="muted" style="font-size:13.5px; margin-top:4px;">
+        You'll see a model of your choices as an ordered checklist, and can review and edit it.
       </div>
     </label>
-    <label style="flex:1; border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
+    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
       <input type="radio" name="model_type" value="twostage"> <strong>Feature list</strong>
-      <div class="muted" style="font-size:14px; margin-top:4px;">
-        Every factor is weighed on its own, then combined into one overall answer.
+      <div class="muted" style="font-size:13.5px; margin-top:4px;">
+        You'll see a model that weighs every factor on its own, and can review and edit it.
+      </div>
+    </label>
+    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
+      <input type="radio" name="model_type" value="twostage_v2"> <strong>Feature list v2</strong>
+      <div class="muted" style="font-size:13.5px; margin-top:4px;">
+        Same model as Feature list, shown and edited one factor at a time.
+      </div>
+    </label>
+    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
+      <input type="radio" name="model_type" value="control"> <strong>Control</strong>
+      <div class="muted" style="font-size:13.5px; margin-top:4px;">
+        No model shown — you'll just answer some additional scenarios instead.
       </div>
     </label>
   </div>
   {% endif %}
   <strong>What should we call you?</strong>
-  <div class="spacer-16"></div>
+  <div style="height:8px"></div>
   <input type="text" name="username" placeholder="Enter your name to begin" autofocus>
   <div class="spacer-16"></div>
   <button type="submit" class="btn btn-primary btn-block">Start →</button>

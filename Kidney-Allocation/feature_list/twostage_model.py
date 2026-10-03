@@ -195,6 +195,25 @@ def _default_model():
 
 # ── Stage 2 (fixed aggregation) + evaluation ──────────────────────────────────
 
+def _amp_for(matters):
+    """
+    AMP[1..3] ("a little"/"somewhat"/"a lot") as fixed anchor points, with the
+    fine-grained strength slider (see twostage.html/twostage_v2.html) able to
+    land anywhere between them — the three buttons sit at equal 1-unit steps
+    on that same 1..3 scale, so a slider drag just linearly interpolates
+    between whichever two buttons it's currently between.
+    """
+    if matters <= 0:
+        return 0.0
+    if matters <= 1:
+        return AMP[1] * matters
+    if matters >= 3:
+        return AMP[3]
+    if matters <= 2:
+        return AMP[1] + (AMP[2] - AMP[1]) * (matters - 1)
+    return AMP[2] + (AMP[3] - AMP[2]) * (matters - 2)
+
+
 def edit_value(model, key, v):
     """This feature's signed contribution for one patient's raw value v."""
     st = model["features"].get(key)
@@ -208,7 +227,7 @@ def edit_value(model, key, v):
     else:
         mag = (v - lo) / (hi - lo) if hi > lo else 0.0
     sign = 1.0 if st["dir"] == "favor" else -1.0
-    return AMP[st["matters"]] * mag * sign
+    return _amp_for(st["matters"]) * mag * sign
 
 
 def cond_pass(model, key, patient):
@@ -245,7 +264,7 @@ def predict_prob(model, a, b):
                 pb += 1
         return _sigmoid(TALLY_GAIN * (pa - pb))
     if agg == "prominent":
-        order = sorted(keys, key=lambda k: AMP[model["features"][k]["matters"]], reverse=True)
+        order = sorted(keys, key=lambda k: _amp_for(model["features"][k]["matters"]), reverse=True)
         for k in order:
             if model["features"][k]["matters"] == 0:
                 continue
@@ -281,7 +300,7 @@ def exit_reason(model, a, b):
                 pb += 1
         return f"Tally: {pa} factor(s) favored A, {pb} favored B."
     if agg == "prominent":
-        order = sorted(keys, key=lambda k: AMP[model["features"][k]["matters"]], reverse=True)
+        order = sorted(keys, key=lambda k: _amp_for(model["features"][k]["matters"]), reverse=True)
         for k in order:
             if model["features"][k]["matters"] == 0:
                 continue

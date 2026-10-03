@@ -35,8 +35,15 @@ def _feature_ranges():
 
 
 # ── View handlers (called from app.py route functions) ────────────────────────
+#
+# v1 ("twostage") shows every feature's card at once in a grid; v2
+# ("twostage_v2") shows one feature at a time via a selector + single pane.
+# Both share the exact same model, training, and edit-saving logic — only the
+# template differs — so results_view()/final_view() take the template name
+# as a parameter rather than duplicating the view logic, and the v2 route
+# just calls through with a different name.
 
-def results_view():
+def results_view(template="twostage.html"):
     username = session["username"]
     users = db.load_all_users()
     rec = users.get(username, {})
@@ -61,7 +68,7 @@ def results_view():
     db.bump_tutorial_seen_count(username)
 
     return render_template(
-        "twostage.html",
+        template,
         final_mode=False,
         apply_url=url_for("apply_edit"),
         reset_url=url_for("reset_edit"),
@@ -82,7 +89,7 @@ def results_view():
     )
 
 
-def final_view():
+def final_view(template="twostage.html"):
     username = session["username"]
     users = db.load_all_users()
     rec = users.get(username, {})
@@ -100,7 +107,7 @@ def final_view():
         return render_template("not_ready.html", n_decisions=len(all_decisions))
 
     return render_template(
-        "twostage.html",
+        template,
         final_mode=True,
         apply_url="", reset_url="", rate_url="", continue_url="", tutorial_seen_url="",
         current_score=None, has_override=False,
@@ -116,8 +123,17 @@ def final_view():
     )
 
 
+def results_view_v2():
+    return results_view(template="twostage_v2.html")
+
+
+def final_view_v2():
+    return final_view(template="twostage_v2.html")
+
+
 def apply_edit_handler(username, payload):
-    """Apply a feature-list model edit. Returns (response_dict, http_status_code)."""
+    """Apply a feature-list model edit (shared by v1 and v2 — same model
+    schema, same storage). Returns (response_dict, http_status_code)."""
     model = payload.get("model")
     if not model:
         return {"error": "missing model"}, 400
