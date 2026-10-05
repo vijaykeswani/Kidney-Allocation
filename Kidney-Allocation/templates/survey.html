@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+.sv-section { margin: 34px 0 10px; }
+.sv-section h3 { font-size: 1.15rem; margin: 0 0 6px; }
+.sv-intro { color: var(--text-secondary); font-size: 14.5px; line-height: 1.6; margin-bottom: 16px; }
+.sv-item { border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; background: #fff; }
+.sv-q { font-size: 15px; line-height: 1.55; margin-bottom: 14px; }
+.sv-scale { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sv-scale .end { font-size: 12.5px; color: var(--text-muted); max-width: 110px; line-height: 1.3; }
+.sv-scale label { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; min-width: 34px; }
+.sv-matrix { width: 100%; border-collapse: collapse; }
+.sv-matrix td { padding: 8px 6px; font-size: 13.5px; vertical-align: middle; }
+.sv-matrix td.rowlabel { width: 46%; color: var(--text); line-height: 1.4; }
+.sv-matrix tr + tr td { border-top: 1px solid var(--border); }
+.sv-choices label { display: block; margin: 6px 0; font-size: 14.5px; cursor: pointer; }
+.sv-submit { margin: 28px 0 40px; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>A few final questions</h1>
+<div class="spacer-14"></div>
+<p class="muted">There are no right or wrong answers — we're interested in your honest impressions.</p>
+
+<form method="post" action="{{ url_for('survey') }}">
+{% for sec in spec %}
+  <div class="sv-section">
+    <h3>{{ sec.title }}</h3>
+    {% if sec.intro %}<div class="sv-intro">{{ sec.intro }}</div>{% endif %}
+  </div>
+  {% for it in sec["items"] %}
+  <div class="sv-item">
+    <div class="sv-q">{{ it.text }}</div>
+
+    {% if it.kind == "likert" %}
+    <div class="sv-scale">
+      <span class="end">{{ it.anchors[0] }}</span>
+      {% for v in range(1, it.n + 1) %}
+      <label><input type="radio" name="{{ it.id }}" value="{{ v }}" required {% if existing.get(it.id) == v|string %}checked{% endif %}>{{ v }}</label>
+      {% endfor %}
+      <span class="end">{{ it.anchors[1] }}</span>
+    </div>
+
+    {% elif it.kind == "matrix" %}
+    <table class="sv-matrix">
+      <tr><td></td><td colspan="{{ it.n }}" style="font-size:12px;color:var(--text-muted);">
+        <span style="float:left">{{ it.anchors[0] }}</span><span style="float:right">{{ it.anchors[1] }}</span></td></tr>
+      {% for key, label in it.rows %}
+      <tr>
+        <td class="rowlabel">{{ label }}</td>
+        {% for v in range(1, it.n + 1) %}
+        <td style="text-align:center"><label><input type="radio" name="{{ it.id }}__{{ key }}" value="{{ v }}" required>
+          <div style="font-size:12px">{{ v }}</div></label></td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+
+    {% elif it.kind == "choice" %}
+    <div class="sv-choices">
+      {% for val, label in it.options %}
+      <label><input type="radio" name="{{ it.id }}" value="{{ val }}" required {% if existing.get(it.id) == val %}checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+      {% if it.other %}
+      <input type="text" name="{{ it.other.id }}" placeholder="{{ it.other.placeholder }}" maxlength="200" style="margin-top:6px;max-width:320px;">
+      {% endif %}
+    </div>
+
+    {% elif it.kind == "number" %}
+    <input type="number" name="{{ it.id }}" min="{{ it.min }}" max="{{ it.max }}" required style="max-width:120px;" value="{{ existing.get(it.id) or '' }}">
+    {% endif %}
+  </div>
+  {% endfor %}
+{% endfor %}
+  <div class="sv-submit"><button type="submit" class="btn btn-primary">Submit →</button></div>
+</form>
+{% endblock %}

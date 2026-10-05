@@ -30,7 +30,8 @@ def _feature_ranges():
     out = {}
     for p in FEATURES:
         lo, hi = features.ranges()[p]
-        out[p] = {"min": lo, "max": hi, "step": 1}
+        out[p] = {"min": lo, "max": hi, "step": features.value_steps()[p],
+                  "values": features.FEATURE_BY_KEY[p].get("values")}
     return out
 
 
@@ -70,6 +71,7 @@ def results_view(template="twostage.html"):
     return render_template(
         template,
         final_mode=False,
+        survey_url="",
         apply_url=url_for("apply_edit"),
         reset_url=url_for("reset_edit"),
         rate_url=url_for("rate"),
@@ -93,7 +95,10 @@ def final_view(template="twostage.html"):
     username = session["username"]
     users = db.load_all_users()
     rec = users.get(username, {})
-    override = db.get_fft_override(username)
+    # Deliberately NOT loading the participant's saved edits: the final page
+    # shows the freshly-trained, unedited model for every arm, so the trust
+    # questions that follow are about the same kind of artifact for everyone.
+    override = None
 
     all_decisions = (
         [d for d in rec.get("part1", []) if d.get("choice") in ("A", "B")]
@@ -109,6 +114,7 @@ def final_view(template="twostage.html"):
     return render_template(
         template,
         final_mode=True,
+        survey_url=url_for("survey"),
         apply_url="", reset_url="", rate_url="", continue_url="", tutorial_seen_url="",
         current_score=None, has_override=False,
         model_json=stats["model"],

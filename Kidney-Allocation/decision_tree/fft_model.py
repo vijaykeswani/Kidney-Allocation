@@ -38,6 +38,7 @@ Public API
 """
 
 import json
+import math
 import os
 try:
     from dotenv import load_dotenv
@@ -967,6 +968,23 @@ def explain_thinking_evolution_llm(part1_tree, part2_tree, part3_tree=None):
 # TRAINING ENTRY POINT
 # ════════════════════════════════════════════════════════════════════════════
 
+def _snap_thresholds_to_value_grid(tree):
+    """
+    Differences between two patients can only land on multiples of the feature's natural
+    step (life years {5,10,...} -> multiples of 5). A fitted threshold of 3 behaves exactly
+    like 5 there, but reads oddly ("a gap of 3 years or more"). Move each threshold to the
+    nearest value that can actually occur *in the direction that keeps the same firing set*,
+    so predictions are unchanged and the wording is honest.
+    """
+    steps = features.value_steps()
+    for nd in tree.nodes:
+        step = steps.get(str(nd.get("feature", "")).replace("_diff", ""), 1)
+        t = nd.get("threshold")
+        if step > 1 and t:
+            snapped = math.ceil(t / step) * step if nd.get("op", ">=") == ">=" else math.floor(t / step) * step
+            nd["threshold"] = float(snapped)
+
+
 def train_fft(decisions_json, params, override_json=None, max_depth=4):
     """
     Train (or load an edited) FFT.
@@ -996,6 +1014,7 @@ def train_fft(decisions_json, params, override_json=None, max_depth=4):
         edited = True
     else:
         tree = FastFrugalTree(max_depth=max_depth).fit(F_aug, y_aug, feature_names=feat_names)
+        _snap_thresholds_to_value_grid(tree)
         edited = False
 
     # Attach/refresh the near-tie tie-breaker nodes against the real training

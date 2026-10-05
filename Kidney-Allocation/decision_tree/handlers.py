@@ -111,7 +111,8 @@ def _feature_ranges():
     out = {}
     for p in FEATURES:
         lo, hi = features.ranges()[p]
-        out[p] = {"min": lo, "max": hi, "step": 1}
+        out[p] = {"min": lo, "max": hi, "step": features.value_steps()[p],
+                  "values": features.FEATURE_BY_KEY[p].get("values")}
     return out
 
 
@@ -169,7 +170,10 @@ def final_view():
     username = session["username"]
     users = db.load_all_users()
     rec = users.get(username, {})
-    override = db.get_fft_override(username)
+    # Deliberately NOT loading the participant's saved edits: every arm ends
+    # on a freshly-trained, unedited model, so the trust questions that follow
+    # are about the same kind of artifact for everyone (control has no edits).
+    override = None
 
     all_decisions = (
         [d for d in rec.get("part1", []) if d.get("choice") in ("A", "B")]
@@ -188,7 +192,7 @@ def final_view():
         node_explanations=stats.get("node_explanations"),
         summary_explanation=stats.get("summary_explanation"),
     )
-    return render_template("final.html", svg=svg)
+    return render_template("final.html", svg=svg, survey_url=url_for("survey"))
 
 
 def apply_edit_handler(username, payload):

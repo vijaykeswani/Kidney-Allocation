@@ -31,6 +31,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 
 import db
 import features
+import survey_spec
 import decision_tree
 import feature_list
 import decision_tree.handlers as dt_handlers
@@ -45,9 +46,13 @@ FEATURE_LABELS = {k: v["label"] for k, v in features.FEATURE_BY_KEY.items()}
 
 PART1_N = 20
 PART2_N = 10
-CONTROL_EXTRA_N = 20  # control arm: extra scenarios instead of seeing/editing a model
+# Control sees no model mid-study, but should still spend about the same
+# time as the treatment arms (20 + 10 scenarios) — so its "extra" batch is
+# the same size as Part 2, not an additional chunk on top.
+CONTROL_EXTRA_N = PART2_N
 
 MODEL_TYPES = ("fft", "twostage", "twostage_v2", "control")
+DISPLAYABLE_MODEL_TYPES = ("fft", "twostage", "twostage_v2")  # real models control can be shown
 
 db.init_db(FEATURES)
 
@@ -181,6 +186,19 @@ def _require_user():
     return None
 
 
+def _display_model_type():
+    """Which model type to actually render at /final — the participant's own
+    model_type for treatment arms, or control's randomly-assigned one."""
+    mt = _model_type()
+    if mt != "control":
+        return mt
+    if "display_model_type" in session:
+        return session["display_model_type"]
+    dmt = db.get_display_model_type(session["username"])
+    session["display_model_type"] = dmt
+    return dmt
+
+
 # ── Shared base-pipeline routes ───────────────────────────────────────────────
 
 def _requested_model():
@@ -229,6 +247,14 @@ def do_start():
     session["model_type"] = model_type
     db.set_model_type(name, model_type)
 
+    if model_type == "control":
+        # Control never interacts with a model mid-study, but under the
+        # symmetric end-of-study design it still sees one, read-only, at the
+        # very end — assigned at random now so it's fixed for the session.
+        display_type = random.choice(DISPLAYABLE_MODEL_TYPES)
+        db.set_display_model_type(name, display_type)
+        session["display_model_type"] = display_type
+
     users, rec = get_user_record()
     if "part1_scenarios" not in rec:
         rec["part1_scenarios"] = shuffle_scenarios(generate_scenarios(PART1_N))
@@ -260,8 +286,11 @@ def questionnaire(part):
 
     if idx >= n_total:
         if part == 1:
-            return redirect(url_for("questionnaire", part=2) if is_control else url_for("results"))
-        return redirect(url_for("done") if is_control else url_for("final"))
+            return redirect(url_for("control_transition") if is_control else url_for("results"))
+        # Both arms reach /final now — control just hasn't edited anything,
+        # so it always shows the freshly-trained, unedited model (see
+        # DISPLAYABLE_MODEL_TYPES / _display_model_type()).
+        return redirect(url_for("final"))
 
     heading = "Which patient should receive the organ?" if part == 1 else "Part 2: A few more scenarios"
     if part == 1:
@@ -305,6 +334,40 @@ def part2_intro():
     return redirect(url_for("questionnaire", part=2))
 
 
+@app.route("/control/transition")
+def control_transition():
+    """
+    Control's stand-in for the treatment arms' /results — no model is shown,
+    just an acknowledgement, so the two experiences feel structurally similar
+    even though nothing is displayed here.
+    """
+    guard = _require_user()
+    if guard:
+        return guard
+    return render_template("control_transition.html")
+
+
+
+@app.route("/survey", methods=["GET", "POST"])
+def survey():
+    """End-of-study questionnaire — same questions for every arm, except the
+    'which experiences impacted you' block, which only lists what that arm
+    actually had the chance to do."""
+    guard = _require_user()
+    if guard:
+        return guard
+    arm = "control" if _model_type() == "control" else "treatment"
+    spec = survey_spec.build_survey(arm)
+    if request.method == "POST":
+        answers = survey_spec.collect_answers(spec, request.form)
+        answers["_arm"] = arm
+        answers["_model_type"] = _model_type()
+        answers["_display_model_type"] = _display_model_type()
+        db.set_survey_answers(session["username"], answers)
+        db.log_event(session["username"], "survey_submitted", {"arm": arm})
+        return redirect(url_for("done"))
+    return render_template("survey.html", spec=spec, existing=db.get_survey_answers(session["username"]) or {})
+
 @app.route("/done")
 def done():
     """Terminal page for the control arm — no model to show, just a thank-you."""
@@ -325,7 +388,7 @@ def results():
         return guard
     mt = _model_type()
     if mt == "control":
-        return redirect(url_for("questionnaire", part=2))
+        return redirect(url_for("control_transition"))
     if mt == "twostage_v2":
         return fl_handlers.results_view_v2()
     if mt == "twostage":
@@ -338,12 +401,13 @@ def final():
     guard = _require_user()
     if guard:
         return guard
-    mt = _model_type()
-    if mt == "control":
-        return redirect(url_for("done"))
-    if mt == "twostage_v2":
+    # Everyone ends on the same kind of page: a freshly-trained, UNEDITED
+    # model of the kind their condition used (control: the kind assigned at
+    # signup). The participant's own edits are deliberately not shown here.
+    dmt = _display_model_type()
+    if dmt == "twostage_v2":
         return fl_handlers.final_view_v2()
-    if mt == "twostage":
+    if dmt == "twostage":
         return fl_handlers.final_view()
     return dt_handlers.final_view()
 

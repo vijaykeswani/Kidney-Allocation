@@ -185,6 +185,15 @@ _ADDED_USER_COLUMNS = [
     # at signup, never changed after. Existing rows default to "fft" so
     # nothing about already-running sessions changes.
     ("model_type",          "TEXT NOT NULL DEFAULT 'fft'"),
+    # Control-arm participants never pick a model_type (it's "control"), but
+    # under the symmetric end-of-study design they still see *a* trained
+    # model once, read-only, at the very end — this says which kind. Chosen
+    # at random when their session starts (see app.py do_start). Unused for
+    # treatment arms, which just use model_type directly.
+    ("display_model_type",  "TEXT"),
+    # End-of-study trust/alignment/demographics questionnaire — one JSON blob
+    # per participant, same storage pattern as fft_override.
+    ("survey_json",         "TEXT"),
 ]
 
 
@@ -385,6 +394,23 @@ def delete_fft_override(username):
         conn.execute("UPDATE users SET fft_override=NULL WHERE username=?", (username,))
 
 
+def set_survey_answers(username, answers):
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO users (username, survey_json) VALUES (?, ?) "
+            "ON CONFLICT(username) DO UPDATE SET survey_json = excluded.survey_json",
+            (username, json.dumps(answers)),
+        )
+
+
+def get_survey_answers(username):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT survey_json FROM users WHERE username=?", (username,)
+        ).fetchone()
+    return json.loads(row["survey_json"]) if row and row["survey_json"] else None
+
+
 # ── model version ─────────────────────────────────────────────────────────────
 #
 # Bumped every time the participant applies or resets an edit. Trials record the
@@ -432,6 +458,27 @@ def get_model_type(username):
             "SELECT model_type FROM users WHERE username=?", (username,)
         ).fetchone()
     return row["model_type"] if row and row["model_type"] else "fft"
+
+
+def set_display_model_type(username, display_model_type):
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO users (username, display_model_type) VALUES (?, ?) "
+            "ON CONFLICT(username) DO UPDATE SET display_model_type = excluded.display_model_type",
+            (username, display_model_type),
+        )
+
+
+def get_display_model_type(username):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT display_model_type, model_type FROM users WHERE username=?", (username,)
+        ).fetchone()
+    if not row:
+        return "fft"
+    # Treatment arms just use their own model_type; only control needed a
+    # separately-assigned one.
+    return row["display_model_type"] or row["model_type"] or "fft"
 
 
 # ── tutorial ──────────────────────────────────────────────────────────────────

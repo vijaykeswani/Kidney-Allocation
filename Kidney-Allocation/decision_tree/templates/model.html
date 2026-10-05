@@ -14,8 +14,8 @@
    inline styles it sets, so there's one definition, not two. */
 :root {
   /* Patient identity — used ONLY for Patient A/B, nowhere else. */
-  --patient-a: #be123c;       --patient-a-soft: #fff1f2;
-  --patient-b: #1d4ed8;       --patient-b-soft: #eff6ff;
+  --patient-a: #0f766e;       --patient-a-soft: #d8ecea;
+  --patient-b: #b1622f;       --patient-b-soft: #f6e7dd;
 
   /* Interactive accent (buttons, links, edit mode) — deliberately a
      different hue from both patient colors, so "editable"/"clickable"
@@ -510,7 +510,7 @@ body { padding: 0; }
 .audit-form-col-title.b { color: var(--patient-b); }
 .audit-field { margin-bottom: 8px; }
 .audit-field label { display: block; font-size: var(--fs-sm); color: var(--text-muted); margin-bottom: 3px; }
-.audit-field input {
+.audit-field input, .audit-field select {
   width: 100%; font-size: var(--fs-base); padding: 7px 9px; border: 1px solid var(--border);
   border-radius: 6px; background: #fff;
 }
@@ -694,7 +694,6 @@ body { padding: 0; }
 <div class="page-wrap">
   <div class="header-row">
     <div>
-<!--      <div class="eyebrow">SURA 2026 · IIT Delhi</div>-->
       <h2>Your preference model</h2>
     </div>
   </div>
@@ -2464,13 +2463,28 @@ function randomFeatureValues() {
   var vals = {};
   getFeatureBase().forEach(function(f) {
     var r = FEATURE_RANGES[f];
-    if (r && typeof r.min === 'number' && typeof r.max === 'number') {
+    var allowed = (FEATURE_BY_KEY[f] || {}).values;
+    if (allowed && allowed.length) {
+      vals[f] = String(allowed[Math.floor(Math.random() * allowed.length)]);
+    } else if (r && typeof r.min === 'number' && typeof r.max === 'number') {
       vals[f] = String(Math.round(r.min + Math.random() * (r.max - r.min)));
     } else {
       vals[f] = '';
     }
   });
   return vals;
+}
+
+// Features with a fixed value set get a dropdown of exactly those values (a free number
+// box would let people enter patients the study can never show).
+function auditInputFor(side, f, val) {
+  var allowed = (FEATURE_BY_KEY[f] || {}).values, id = 'audit-in-' + side + '-' + f;
+  if (allowed && allowed.length) {
+    return '<select id="' + id + '"><option value="">\u2014</option>' + allowed.map(function(v) {
+      return '<option value="' + v + '"' + (String(val) === String(v) ? ' selected' : '') + '>' + v + '</option>';
+    }).join('') + '</select>';
+  }
+  return '<input type="number" id="' + id + '" value="' + esc(val) + '">';
 }
 
 function emptyFeatureValues() {
@@ -2490,7 +2504,7 @@ function renderNewScenarioView(useRandom) {
     html += '<div><div class="audit-form-col-title ' + side + '">Patient ' + side.toUpperCase() + '</div>';
     getFeatureBase().forEach(function(f) {
       html += '<div class="audit-field"><label>' + esc(pretty(f)) + '</label>'
-            + '<input type="number" id="audit-in-' + side + '-' + f + '" value="' + esc(vals[f]) + '"></div>';
+            + auditInputFor(side, f, vals[f]) + '</div>';
     });
     html += '</div>';
   });

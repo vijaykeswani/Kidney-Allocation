@@ -1,72 +1,102 @@
 {
-    "_comment": "Single source of truth for every feature used in the study. To swap in a different set of features later, edit this file only — app.py, fft_model.py, fft_component.py and model.html all read their feature-specific data from here rather than hardcoding it. Order here is the order features appear everywhere (dropdowns, patient cards, etc).",
-
-    "features": [
-      {
-        "key": "dependents",
-        "label": "Dependents",
-        "description": "Number of people who depend on this patient (family, caregivers).",
-        "min": 0,
-        "max": 5,
-        "unit": "",
-        "gap_phrase": "dependents gap",
-        "direction_higher": "Choose more dependents",
-        "direction_lower": "Choose fewer dependents",
-        "direction_higher_short": "More deps.",
-        "direction_lower_short": "Fewer deps."
-      },
-      {
-        "key": "years_waiting",
-        "label": "Years Waiting",
-        "description": "How long the patient has been on the transplant waiting list.",
-        "min": 0,
-        "max": 10,
-        "unit": "years",
-        "gap_phrase": "waiting time gap",
-        "direction_higher": "Choose patient waiting longer",
-        "direction_lower": "Choose patient waiting shorter",
-        "direction_higher_short": "Longer wait",
-        "direction_lower_short": "Shorter wait"
-      },
-      {
-        "key": "rejection_risk",
-        "label": "Rejection Risk",
-        "description": "Estimated chance of the immune system rejecting the kidney (1 = very low, 10 = very high; takes values 1, 2, 5, or 10).",
-        "min": 1,
-        "max": 10,
-        "values": [1, 2, 5, 10],
-        "unit": "points",
-        "gap_phrase": "rejection risk gap",
-        "direction_higher": "Choose patient with higher rejection risk",
-        "direction_lower": "Choose patient with lower rejection risk",
-        "direction_higher_short": "Higher risk",
-        "direction_lower_short": "Lower risk"
-      },
-      {
-        "key": "life_years_gained",
-        "label": "Life Years Gained",
-        "description": "Estimated additional life years the patient would gain from a successful transplant.",
-        "min": 1,
-        "max": 30,
-        "unit": "years",
-        "gap_phrase": "life years gap",
-        "direction_higher": "Choose patient gaining more life years",
-        "direction_lower": "Choose patient gaining fewer life years",
-        "direction_higher_short": "More years",
-        "direction_lower_short": "Fewer years"
-      },
-      {
-        "key": "violent_crimes",
-        "label": "Past Violent Crimes",
-        "description": "Number of past violent criminal convictions on record.",
-        "min": 0,
-        "max": 5,
-        "unit": "",
-        "gap_phrase": "criminal record gap",
-        "direction_higher": "Choose patient with more past violent crimes",
-        "direction_lower": "Choose patient with fewer past violent crimes",
-        "direction_higher_short": "More crimes",
-        "direction_lower_short": "Fewer crimes"
-      }
-    ]
-  }
+  "_comment": "Single source of truth for every feature used in the study. To swap in a different set of features later, edit this file only \u2014 app.py, fft_model.py, fft_component.py and model.html all read their feature-specific data from here rather than hardcoding it. Order here is the order features appear everywhere (dropdowns, patient cards, etc).",
+  "features": [
+    {
+      "key": "dependents",
+      "label": "Dependents",
+      "description": "Number of people who depend on this patient (family, caregivers).",
+      "min": 0,
+      "max": 3,
+      "unit": "",
+      "gap_phrase": "dependents gap",
+      "direction_higher": "Choose more dependents",
+      "direction_lower": "Choose fewer dependents",
+      "direction_higher_short": "More deps.",
+      "direction_lower_short": "Fewer deps.",
+      "values": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "key": "years_waiting",
+      "label": "Years Waiting",
+      "description": "How long the patient has been on the transplant waiting list.",
+      "min": 1,
+      "max": 9,
+      "unit": "years",
+      "gap_phrase": "waiting time gap",
+      "direction_higher": "Choose patient waiting longer",
+      "direction_lower": "Choose patient waiting shorter",
+      "direction_higher_short": "Longer wait",
+      "direction_lower_short": "Shorter wait",
+      "values": [
+        1,
+        3,
+        5,
+        7,
+        9
+      ]
+    },
+    {
+      "key": "rejection_risk",
+      "label": "Rejection Risk",
+      "description": "Estimated chance of the immune system rejecting the kidney (1 = very low, 15 = very high; takes values 1, 2, 5, 10, or 15).",
+      "min": 1,
+      "max": 15,
+      "values": [
+        1,
+        2,
+        5,
+        10,
+        15
+      ],
+      "unit": "points",
+      "gap_phrase": "rejection risk gap",
+      "direction_higher": "Choose patient with higher rejection risk",
+      "direction_lower": "Choose patient with lower rejection risk",
+      "direction_higher_short": "Higher risk",
+      "direction_lower_short": "Lower risk"
+    },
+    {
+      "key": "life_years_gained",
+      "label": "Life Years Gained",
+      "description": "Estimated additional life years the patient would gain from a successful transplant.",
+      "min": 5,
+      "max": 25,
+      "unit": "years",
+      "gap_phrase": "life years gap",
+      "direction_higher": "Choose patient gaining more life years",
+      "direction_lower": "Choose patient gaining fewer life years",
+      "direction_higher_short": "More years",
+      "direction_lower_short": "Fewer years",
+      "values": [
+        5,
+        10,
+        15,
+        20,
+        25
+      ]
+    },
+    {
+      "key": "violent_crimes",
+      "label": "Past Violent Crimes",
+      "description": "Number of past violent criminal convictions on record.",
+      "min": 0,
+      "max": 2,
+      "unit": "",
+      "gap_phrase": "criminal record gap",
+      "direction_higher": "Choose patient with more past violent crimes",
+      "direction_lower": "Choose patient with fewer past violent crimes",
+      "direction_higher_short": "More crimes",
+      "direction_lower_short": "Fewer crimes",
+      "values": [
+        0,
+        1,
+        2
+      ]
+    }
+  ]
+}

@@ -34,6 +34,12 @@ TALLY_GAIN = 0.95   # sharpness of the "tally" verdict sigmoid
 
 MIN_DECISIONS = 6
 
+# Discretization cutoffs used when reading a fitted curve into an editable rule:
+#   a feature is shown as "no effect" if its fitted curve's total rise is below OFF_RANGE;
+#   it's shown as "only past a point" if one bin holds more than STEP_SHARE of that rise.
+OFF_RANGE = 0.8
+STEP_SHARE = 0.6
+
 
 def _softplus(r):
     return np.log1p(np.exp(-np.abs(r))) + np.maximum(r, 0)
@@ -65,71 +71,97 @@ def _extract_queries(decisions):
 # A direct translation of the reference prototype's train()/curveToParams(),
 # same hyperparameters, so behaviour matches what was validated there.
 
-def _fit_curves(queries, lr=0.15, lam=0.02, iters=700, gain=GAIN):
+# A feature's curve is fit over its *levels* — the values it can actually take
+# (features.json "values"; for a feature without one, every integer in its
+# range). One increment is learned per gap between consecutive levels, so
+# life_years_gained {5,10,15,20,25} has 4 parameters, not 20 unit steps.
+# If a feature has more than MAX_BINS gaps, adjacent gaps are grouped into at
+# most MAX_BINS shared parameters: with only ~20 noisy answers that cuts
+# variance (see SIMULATION_NOTES.md). With the current value sets every
+# feature has <= 4 gaps, so each gap gets its own parameter.
+MAX_BINS = 5
+
+
+def _levels(key):
+    entry = features.FEATURE_BY_KEY[key]
+    vals = entry.get("values")
+    if vals:
+        return np.array(sorted(float(v) for v in vals))
+    return np.arange(int(entry["min"]), int(entry["max"]) + 1, dtype=float)
+
+
+def _level_index(levels, v):
+    """Index of the level nearest to v (answers always sit exactly on a level)."""
+    return int(np.argmin(np.abs(levels - float(v))))
+
+
+def _bin_layout(key):
+    """(gap->bin index, bin sizes in gaps, bin edges as level indices) for a feature."""
+    n = len(_levels(key)) - 1
+    if n <= 0:
+        return np.zeros(0, dtype=int), np.ones(1), [0, 0]
+    nb = min(MAX_BINS, n)
+    binof = np.minimum((np.arange(n) * nb) // n, nb - 1)
+    width = np.bincount(binof, minlength=nb).astype(float)
+    edges = [0] + [j for j in range(1, n) if binof[j] != binof[j - 1]] + [n]
+    return binof, width, edges
+
+
+def _fit_curves(queries, lr=0.15, lam=0.05, iters=700, gain=GAIN):
     """
     Jointly fits one monotonic step function per feature against the same set
     of pairwise comparisons (the prediction for a query sums every feature's
-    contribution, so the gradient for each feature's curve is shaped by how
-    well the *whole* model currently explains the data — not fit in isolation).
+    contribution, so each feature's curve is shaped by how well the *whole*
+    model currently explains the data — not fit alone).
 
     Returns (learned, polarity):
-      learned[key] -> list of length (max-min+1), the sign-adjusted cumulative
-                      score at each value from min to max.
+      learned[key] -> list with one entry per level of the feature: the
+                      sign-adjusted cumulative score at that level.
       polarity[key] -> +1 or -1, which direction the feature initially leans.
     """
     keys = features.FEATURE_KEYS
-    ranges = features.ranges()
-    spans = {k: max(0, int(ranges[k][1] - ranges[k][0])) for k in keys}
+    levels = {k: _levels(k) for k in keys}
+    gaps = {k: len(levels[k]) - 1 for k in keys}
+    layout = {k: _bin_layout(k) for k in keys}
+    nb = {k: (int(layout[k][0].max()) + 1 if gaps[k] > 0 else 0) for k in keys}
 
-    raw = {k: np.zeros(spans[k]) for k in keys}
+    # level index of every patient value in every query, once
+    ia = {k: np.array([_level_index(levels[k], a[k]) for a, b, y in queries]) for k in keys}
+    ib = {k: np.array([_level_index(levels[k], b[k]) for a, b, y in queries]) for k in keys}
+
+    raw = {k: np.zeros(nb[k]) for k in keys}
     polarity = {}
     for k in keys:
         c = sum((a[k] - b[k]) * (y - 0.5) for a, b, y in queries)
         polarity[k] = 1.0 if c >= 0 else -1.0
 
+    def cumulative(k):
+        C = np.zeros(gaps[k] + 1)
+        if gaps[k] > 0:
+            binof, width, _ = layout[k]
+            C[1:] = np.cumsum(_softplus(raw[k])[binof] / width[binof])
+        return C
+
     N = max(1, len(queries))
-
+    ys = np.array([y for a, b, y in queries], dtype=float)
     for _ in range(iters):
-        cum = {}
+        cum = {k: cumulative(k) for k in keys}
+        z = np.zeros(len(queries))
         for k in keys:
-            C = np.zeros(spans[k] + 1)
-            if spans[k] > 0:
-                C[1:] = np.cumsum(_softplus(raw[k]))
-            cum[k] = C
-
-        def sc(k, v):
-            lo = ranges[k][0]
-            idx = int(round(v - lo))
-            idx = max(0, min(idx, len(cum[k]) - 1))
-            return polarity[k] * cum[k][idx]
-
-        grad = {k: np.zeros(spans[k]) for k in keys}
-        for a, b, y in queries:
-            z = sum(sc(k, a[k]) - sc(k, b[k]) for k in keys)
-            err = _sigmoid(gain * z) - y
-            for k in keys:
-                if spans[k] == 0:
-                    continue
-                lo = ranges[k][0]
-                pa, pb = a[k] - lo, b[k] - lo
-                ks = np.arange(spans[k])
-                grad[k] += err * gain * polarity[k] * ((pa > ks).astype(float) - (pb > ks).astype(float))
-
+            z += polarity[k] * (cum[k][ia[k]] - cum[k][ib[k]])
+        err = _sigmoid(gain * z) - ys
         for k in keys:
-            if spans[k] == 0:
+            if gaps[k] == 0:
                 continue
+            binof, width, _ = layout[k]
+            ks = np.arange(gaps[k])
+            ind = (ia[k][:, None] > ks[None, :]).astype(float) - (ib[k][:, None] > ks[None, :]).astype(float)
+            grad_gap = (err[:, None] * gain * polarity[k] * ind).sum(axis=0)
+            gb = np.bincount(binof, weights=grad_gap / width[binof], minlength=nb[k])
             sp = _softplus(raw[k])
-            gk = grad[k] / N + 2 * lam * sp
-            gk = gk * _dsp(raw[k])
-            raw[k] = raw[k] - lr * gk
+            raw[k] = raw[k] - lr * (gb / N + 2 * lam * sp) * _dsp(raw[k])
 
-    learned = {}
-    for k in keys:
-        C = np.zeros(spans[k] + 1)
-        if spans[k] > 0:
-            C[1:] = np.cumsum(_softplus(raw[k]))
-        learned[k] = (polarity[k] * C).tolist()
-
+    learned = {k: (polarity[k] * cumulative(k)).tolist() for k in keys}
     return learned, polarity
 
 
@@ -137,14 +169,16 @@ def _curve_to_params(key, curve, polarity):
     """
     Reads the continuous fitted step function off into one of three editable
     shapes plus a 0-3 strength bucket — showing someone the raw curve isn't
-    editable, but "first counts most, somewhat strongly" is.
+    editable, but "first counts most, somewhat strongly" is. Shape is judged
+    from the increments between the bin edges the curve was fit on, and an
+    "only past a point" cutoff is always one of the feature's real values.
     """
-    lo, hi = features.ranges()[key]
+    levels = _levels(key)
     S = np.asarray(curve, dtype=float)
     mx = float(np.max(np.abs(S))) if S.size else 0.0
     rng = float(np.max(S) - np.min(S)) if S.size else 0.0
 
-    if rng < 0.4:
+    if rng < OFF_RANGE:
         matters = 0
     elif mx < 1.1:
         matters = 1
@@ -154,15 +188,18 @@ def _curve_to_params(key, curve, polarity):
         matters = 3
 
     direction = "favor" if polarity >= 0 else "against"
-    mode, cutoff = "steady", lo + 1
+    mode = "steady"
+    cutoff = float(levels[1] if len(levels) > 1 else levels[0])
 
     if matters > 0 and S.size > 1:
-        inc = np.abs(np.diff(S))
+        _, _, edges = _bin_layout(key)
+        inc = np.abs(np.diff(S[edges]))
         total = float(inc.sum())
         biggest = float(inc.max()) if inc.size else 0.0
-        if inc.size > 1 and total > 0 and biggest > 0.6 * total:
+        if inc.size > 1 and total > 0 and biggest > STEP_SHARE * total:
             mode = "anyvsnone"
-            cutoff = lo + int(np.argmax(inc)) + 1
+            j = int(np.argmax(inc))
+            cutoff = float(levels[(edges[j] + edges[j + 1] + 1) // 2])
         else:
             diminishing = True
             for i in range(1, inc.size):
@@ -186,9 +223,9 @@ def _default_model():
     return {
         "aggregation": "weighted",
         "features": {
-            k: {"matters": 0, "dir": "favor", "mode": "steady", "cutoff": lo + 1,
+            k: {"matters": 0, "dir": "favor", "mode": "steady", "cutoff": float(_levels(k)[1] if len(_levels(k)) > 1 else _levels(k)[0]),
                 "cond": {"on": False, "when": k, "test": "nonzero", "n": 1}}
-            for k, (lo, hi) in features.ranges().items()
+            for k in features.FEATURE_KEYS
         },
     }
 
@@ -318,6 +355,11 @@ def _noun(key):
     return features.FEATURE_BY_KEY[key]["gap_phrase"].replace(" gap", "")
 
 
+def _fmt_num(v):
+    v = float(v)
+    return str(int(v)) if v == int(v) else str(v)
+
+
 def feature_sentence(model, key):
     st = model["features"][key]
     lo, hi = features.ranges()[key]
@@ -326,10 +368,10 @@ def feature_sentence(model, key):
         return f"You don't take {noun} into account."
     side = "in a patient's favor" if st["dir"] == "favor" else "against a patient"
     if st["mode"] == "anyvsnone":
-        if st["cutoff"] <= lo + 1:
+        if st["cutoff"] <= (_levels(key)[1] if len(_levels(key)) > 1 else _levels(key)[0]):
             s = f"Having any {noun} at all counts {side}."
         else:
-            s = f"Reaching {st['cutoff']} or more {noun} counts {side}, while less makes no difference."
+            s = f"Reaching {_fmt_num(st['cutoff'])} or more {noun} counts {side}, while less makes no difference."
     elif st["mode"] == "first":
         s = f"More {noun} counts {side}, and the first bit matters the most."
     else:
@@ -342,7 +384,7 @@ def feature_sentence(model, key):
         elif test == "nonzero":
             cond_txt = f"has any {w_noun}"
         else:
-            cond_txt = f"has at least {st['cond']['n']} {w_noun}"
+            cond_txt = f"has at least {_fmt_num(st['cond']['n'])} {w_noun}"
         s += f" This only applies when the patient {cond_txt}."
     return s
 

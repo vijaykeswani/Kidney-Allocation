@@ -59,3 +59,18 @@ def values_map():
     """key -> list of allowed discrete values, for features with a fixed value set.
     Features without a 'values' entry are continuous and are not included."""
     return {k: v["values"] for k, v in FEATURE_BY_KEY.items() if "values" in v}
+
+def value_steps():
+    """key -> natural increment between allowed values (gcd of the gaps), e.g.
+    life_years_gained {5,10,...} -> 5, years_waiting {1,3,5,...} -> 2. Features with no
+    fixed value set step by 1. Used to snap slider steps and fitted thresholds to values
+    that can actually occur."""
+    from math import gcd
+    out = {}
+    for k, v in FEATURE_BY_KEY.items():
+        vals = sorted(v.get("values") or [])
+        g = 0
+        for a, b in zip(vals, vals[1:]):
+            g = gcd(g, int(b - a))
+        out[k] = g if g > 0 else 1
+    return out

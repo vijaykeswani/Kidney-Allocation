@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Thanks — we've trained an AI model on your responses</h2>
+<div class="spacer-16"></div>
+
+<p>
+  We won't show it to you just yet. First, here are a few more scenarios in the same format —
+  just keep choosing the same way you have been.
+</p>
+
+<div class="spacer-24"></div>
+<a href="{{ url_for('questionnaire', part=2) }}" class="btn btn-primary">Continue →</a>
+{% endblock %}
