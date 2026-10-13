@@ -114,9 +114,18 @@ class FastFrugalTree:
     Class 1 == "prefer candidate A", class 0 == "prefer candidate B".
     """
 
-    def __init__(self, max_depth=4, near_tie_threshold=NEAR_TIE_ABS_THRESHOLD):
+    def __init__(self, max_depth=4, near_tie_threshold=NEAR_TIE_ABS_THRESHOLD,
+                 min_support_frac=0.15, min_support_count=3, laplace_alpha=1.0):
         self.max_depth = int(max_depth)
         self.near_tie_threshold = float(near_tie_threshold)
+        # ── threshold regularization ──────────────────────────────────────
+        # A split is only allowed if at least max(min_support_count,
+        # min_support_frac * n_total) rows exit at it, preventing thresholds
+        # tuned to a handful of noisy points. laplace_alpha smooths purity in
+        # the ranking so tiny "perfect" splits don't beat larger robust ones.
+        self.min_support_frac  = float(min_support_frac)
+        self.min_support_count = int(min_support_count)
+        self.laplace_alpha     = float(laplace_alpha)
         self.nodes = []
         self.default_class = 0
         self.default_support = 0.0
@@ -130,7 +139,7 @@ class FastFrugalTree:
         if len(u) <= 1:
             return np.array([float(u[0]) if len(u) else 0.0])
         # Round midpoints to integers — all features are integer-valued
-        mids = np.ceil((u[:-1] + u[1:]) / 2.0)
+        mids = np.round((u[:-1] + u[1:]) / 2.0)
         cands = np.unique(np.concatenate([mids, [0.0]]))
         if len(cands) > cap:
             idx = np.linspace(0, len(cands) - 1, cap).astype(int)
@@ -152,6 +161,10 @@ class FastFrugalTree:
         used = set()
         self.nodes = []
 
+        # minimum rows that must exit a node (regularization against overfitting)
+        min_exit = max(self.min_support_count,
+                       int(round(self.min_support_frac * n_total)))
+
         for _level in range(self.max_depth):
             idx = np.where(remaining)[0]
             if len(idx) == 0:
@@ -160,7 +173,8 @@ class FastFrugalTree:
             if len(np.unique(yr)) == 1:
                 break  # already pure — the default leaf will cover it
 
-            best = None  # (score, purity, n_exit, fidx, thr, prefer_higher, exit_class, mask)
+            best = None      # (score, purity, n_exit, fidx, thr, prefer_higher, exit_class, mask)
+            best_key = None  # (score, smoothed_purity, n_exit) — ranking key
             for fidx in range(X.shape[1]):
                 if fidx in used:
                     continue
@@ -171,7 +185,7 @@ class FastFrugalTree:
                         continue  # skip zero — trivial split on abs values
                     M = xr_abs >= thr
                     n_exit = int(M.sum())
-                    if n_exit == 0 or n_exit == len(idx):
+                    if n_exit < min_exit or n_exit == len(idx):
                         continue
                     yexit = yr[M]
                     signs = np.sign(xr[M])  # sign of signed diff for exiting rows
@@ -188,8 +202,13 @@ class FastFrugalTree:
                     n_correct = int((yexit == pred_exit).sum())
                     score = n_correct - (n_exit - n_correct)
                     purity = n_correct / n_exit
-                    key = (score, purity, n_exit)
-                    if best is None or key > (best[0], best[1], best[2]):
+                    # Laplace-smoothed purity used only for ranking: down-weights
+                    # tiny high-purity splits so larger robust ones win ties.
+                    a = self.laplace_alpha
+                    smoothed_purity = (n_correct + a) / (n_exit + 2 * a)
+                    key = (score, smoothed_purity, n_exit)
+                    if best_key is None or key > best_key:
+                        best_key = key
                         best = (score, purity, n_exit, fidx,
                                 float(round(thr)), prefer_higher, exit_class, M)
             if best is None:
@@ -539,12 +558,18 @@ class FastFrugalTree:
             "feature_names":         list(self.feature_names),
             "max_depth":             self.max_depth,
             "near_tie_threshold":    self.near_tie_threshold,
+            "min_support_frac":      self.min_support_frac,
+            "min_support_count":     self.min_support_count,
+            "laplace_alpha":         self.laplace_alpha,
         }
 
     @classmethod
     def from_dict(cls, d, feature_names=None):
         t = cls(max_depth=d.get("max_depth", 4),
-                near_tie_threshold=d.get("near_tie_threshold", NEAR_TIE_ABS_THRESHOLD))
+                near_tie_threshold=d.get("near_tie_threshold", NEAR_TIE_ABS_THRESHOLD),
+                min_support_frac=d.get("min_support_frac", 0.15),
+                min_support_count=d.get("min_support_count", 3),
+                laplace_alpha=d.get("laplace_alpha", 1.0))
         t.feature_names = list(feature_names or d.get("feature_names") or [])
         name_to_idx = {n: i for i, n in enumerate(t.feature_names)}
         t.nodes = []
@@ -985,7 +1010,8 @@ def _snap_thresholds_to_value_grid(tree):
             nd["threshold"] = float(snapped)
 
 
-def train_fft(decisions_json, params, override_json=None, max_depth=4):
+def train_fft(decisions_json, params, override_json=None, max_depth=4, near_tie_threshold=0.5,
+              min_support_frac=0.15, min_support_count=3, laplace_alpha=1.0):
     """
     Train (or load an edited) FFT.
 
@@ -1013,13 +1039,16 @@ def train_fft(decisions_json, params, override_json=None, max_depth=4):
         tree.recompute_stats(F_aug, y_aug)   # refresh support/purity for edited thresholds
         edited = True
     else:
-        tree = FastFrugalTree(max_depth=max_depth).fit(F_aug, y_aug, feature_names=feat_names)
+        tree = FastFrugalTree(max_depth=max_depth, near_tie_threshold=near_tie_threshold,
+                              min_support_frac=min_support_frac,
+                              min_support_count=min_support_count,
+                              laplace_alpha=laplace_alpha).fit(F_aug, y_aug, feature_names=feat_names)
         _snap_thresholds_to_value_grid(tree)
         edited = False
 
     # Attach/refresh the near-tie tie-breaker nodes against the real training
     # data (works whether the tree was just fit or loaded from a user override).
-    # tree.attach_near_tie_refinements(F_aug.values, y_aug)
+    tree.attach_near_tie_refinements(F_aug.values, y_aug)
     tree.recompute_stats(F_aug, y_aug)
 
     if not tree.nodes:
