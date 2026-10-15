@@ -10,6 +10,7 @@ import features
 from flask import render_template, session, url_for
 
 import db
+import survey_spec as survey_spec_module
 from feature_list import twostage_model
 
 FEATURES = features.FEATURE_KEYS

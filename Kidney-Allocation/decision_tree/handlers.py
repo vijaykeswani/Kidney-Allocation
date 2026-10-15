@@ -13,6 +13,7 @@ from flask import render_template, session, url_for
 
 import db
 import features
+import survey_spec as survey_spec_module
 from decision_tree import tiebreaker
 from decision_tree.fft_model import (
     FastFrugalTree, augment, build_difference_features, feature_row, train_fft,

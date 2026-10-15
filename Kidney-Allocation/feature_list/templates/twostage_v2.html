@@ -141,12 +141,27 @@ select.ts-cutoff { width: auto; min-width: 70px; }
 
 .ts-feat-list { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
 .ts-feat-item {
-  width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  text-align: left; padding: 10px 12px; border-radius: 8px;
   border: none; background: none; cursor: pointer; font-family: inherit;
   font-size: 14.5px; color: var(--text-muted);
 }
 .ts-feat-item:hover { background: var(--surface); color: var(--text); }
 .ts-feat-item.active { background: var(--surface); color: var(--text); font-weight: 600; }
+.ts-feat-item-name { flex: 1; }
+.ts-feat-item-tag { flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ts-feat-item-tag.favor { background: var(--patient-a-soft); color: var(--patient-a); }
+.ts-feat-item-tag.against { background: var(--patient-b-soft); color: var(--patient-b); }
+.ts-feat-item-tag.none { background: var(--surface); color: var(--text-muted); }
+
+.ts-advanced-toggle {
+  font-size: 12.5px; color: var(--text-muted); background: none; border: none;
+  cursor: pointer; font-family: inherit; padding: 4px 0; margin-bottom: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.ts-advanced-toggle:hover { color: var(--text); }
+.ts-advanced-body { display: none; }
+.ts-advanced-body.open { display: block; }
 
 .ts-v2-pane .ts-card { margin: 0; border: 1px solid var(--border); padding: 20px 22px; border-radius: 12px; background: #fff; }
 .ts-v2-nav { display: flex; justify-content: space-between; margin-top: 24px; }
@@ -197,12 +212,6 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 </style>
 {% endblock %}
 {% block content %}
-<h2>This is how the AI thinks you are making your decisions. Is it correct?</h2>
-<div class="muted" style="font-size:15px; margin:8px 0 18px; line-height:1.6;">
-  Follow the steps below. You can make changes to the model AI learned, as you see fit, to better
-  reflect your decision-making process. The panel below also shows you how your changes impact
-  what choices the model predicts you will make.
-</div>
 
 <button class="ts-match-panel" id="ts-match-panel" type="button">
   <div class="ts-match-num" id="ts-match-num">–</div>
@@ -240,18 +249,17 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 
 <button class="ts-step-card" id="ts-step1-toggle" type="button">
   <div class="ts-step-card-head">
-    <div class="ts-step-title">Step 1. How you consider each feature</div>
+    <div class="ts-step-title">Step 1. Which factors matter — and how much</div>
     <div class="ts-step-preview" id="ts-step1-preview"></div>
   </div>
   <div class="ts-step-chevron" id="ts-step1-chevron">▾</div>
 </button>
 <div class="ts-step-body" id="ts-step1-body">
   <div class="ts-step-sub">
-    Pick a factor on the left. {% if not final_mode %}Use the buttons to change how the model treats it.{% endif %}
+    Select a factor on the left to see how the model treats it. {% if not final_mode %}Use the buttons to correct it if needed.{% endif %}
   </div>
   <div class="ts-legend">
-    In each picture, bars that <b class="up">rise</b> mean the factor makes a patient <b class="up">more likely</b>
-    to be chosen; bars that <b class="down">fall</b> mean it makes them <b class="down">less likely</b>; flat bars mean it makes no difference.
+    <b class="up">↑ Rise</b> = favors the patient &nbsp;·&nbsp; <b class="down">↓ Fall</b> = counts against them &nbsp;·&nbsp; flat = no difference
   </div>
   <div class="ts-v2-layout">
     <div class="ts-feat-list" id="ts-feat-list"></div>
@@ -261,14 +269,14 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 
 <button class="ts-step-card" id="ts-step2-toggle" type="button">
   <div class="ts-step-card-head">
-    <div class="ts-step-title">Step 2. How the features combine</div>
+    <div class="ts-step-title">Step 2. How you weigh those factors together</div>
     <div class="ts-step-preview" id="ts-step2-preview"></div>
   </div>
   <div class="ts-step-chevron" id="ts-step2-chevron">▾</div>
 </button>
 <div class="ts-step-body" id="ts-step2-body">
   <div class="ts-step-sub">
-    {% if not final_mode %}Choose the strategy that most accurately reflects how you ultimately decide.{% endif %}
+    {% if not final_mode %}Pick the approach that best matches how you make a final call when multiple factors point different ways.{% endif %}
   </div>
   <div id="ts-agg"></div>
 </div>
@@ -825,13 +833,13 @@ function renderSummary() {
   var current = n ? matchCount() : 0;
   document.getElementById('ts-match-num').textContent = n ? current : '\u2013';
   document.getElementById('ts-match-line').textContent = n
-    ? ('The current model reproduces your earlier choices in ' + current + ' of ' + n + ' cases.')
+    ? ('The model matches your choices in ' + current + ' of ' + n + ' cases.')
     : '';
   var subEl = document.getElementById('ts-match-sub');
   if (BASELINE_MATCHES !== null && BASELINE_MATCHES !== current) {
-    subEl.textContent = "You've edited the model. It started at " + BASELINE_MATCHES + ' of ' + n + '.';
+    subEl.textContent = "You've edited the model. It started at " + BASELINE_MATCHES + ' of ' + n + '. Tap to see case details.';
   } else {
-    subEl.textContent = 'Tap to see how it does case by case, or try your own.';
+    subEl.textContent = 'Tap to see which cases match — or try your own.';
   }
 
   var lines = FEATURES_DATA.map(function(f) { return featureSentence(f.key); });
@@ -878,7 +886,7 @@ function renderFeatList() {
     item.type = 'button';
     item.className = 'ts-feat-item' + (f.key === tsSelectedFeature ? ' active' : '');
     var tagCls = st.matters === 0 ? 'none' : st.dir;
-    var tagTxt = st.matters === 0 ? 'off' : (st.dir === 'favor' ? '\u2191' : '\u2193');
+    var tagTxt = st.matters === 0 ? 'off' : (st.dir === 'favor' ? '\u2191 Helps' : '\u2193 Against');
     item.innerHTML = '<span class="ts-feat-item-name">' + esc(f.label) + '</span>'
       + '<span class="ts-feat-item-tag ' + tagCls + '">' + tagTxt + '</span>';
     item.addEventListener('click', function() { tsSelectedFeature = f.key; tsGhost = null; tsDelta = null; refresh(); });
@@ -886,10 +894,9 @@ function renderFeatList() {
   });
 }
 
-// Simplified vs v1 on purpose: no Shape/Cutoff controls here (the reference
-// layout doesn't expose them) — a feature's shape still comes from training
-// and still drives the chart, it's just not hand-editable in this view.
-// Only direction, strength, and (now) an exception condition are editable.
+// Shape and Cutoff are tucked behind an "Advanced settings" toggle so the
+// default view only shows Direction + Strength. The toggle auto-opens when
+// the feature's mode is not "steady" so the actual setting is always visible.
 var tsExceptOpen = {};
 
 function renderFeatures() {
@@ -907,7 +914,7 @@ function renderFeatures() {
   card.className = 'ts-card' + (st.matters === 0 ? ' ts-off' : '');
 
   var badgeCls = st.matters === 0 ? 'none' : st.dir;
-  var badgeTxt = st.matters === 0 ? 'No effect' : (st.dir === 'favor' ? '\u2191 Helps them' : '\u2193 Counts against a patient');
+  var badgeTxt = st.matters === 0 ? "Doesn't matter" : (st.dir === 'favor' ? '\u2191 Helps them' : '\u2193 Counts against a patient');
   var html = '<div class="ts-badge ' + badgeCls + '">' + badgeTxt + '</div>';
   html += '<div class="ts-fdesc" id="ts-desc-' + f.key + '" style="margin-top:10px;">' + esc(featureSentence(f.key)) + '</div>';
   var ghostNow = (tsGhost && tsGhost.key === f.key) ? tsGhost : null;
@@ -916,10 +923,14 @@ function renderFeatures() {
   html += '<div class="ts-row" style="margin-top:18px;"><span class="lab">More ' + esc(noun(f.key)) + '\u2026</span><div class="ts-btns">'
     + btn('dir', f.key, 'favor', 'helps them', st.dir === 'favor' && st.matters > 0)
     + btn('dir', f.key, 'against', 'counts against them', st.dir === 'against' && st.matters > 0)
-    + btn('dir', f.key, 'none', 'no effect', st.matters === 0)
+    + btn('dir', f.key, 'none', "doesn't matter", st.matters === 0)
     + '</div></div>';
 
   if (st.matters > 0) {
+    var advOpen = FINAL_MODE || st.mode !== 'steady';
+    html += '<button type="button" class="ts-advanced-toggle" id="ts-adv-btn-' + f.key + '">'
+      + (advOpen ? '\u25be' : '\u25b8') + ' Advanced settings</button>';
+    html += '<div class="ts-advanced-body' + (advOpen ? ' open' : '') + '" id="ts-adv-body-' + f.key + '">';
     html += '<div class="ts-row"><span class="lab">Shape</span><div class="ts-btns">'
       + btn('mode', f.key, 'anyvsnone', 'Only past a point', st.mode === 'anyvsnone', shapeIcon(f.key, st, 'anyvsnone'))
       + btn('mode', f.key, 'first', 'First counts most', st.mode === 'first', shapeIcon(f.key, st, 'first'))
@@ -928,6 +939,7 @@ function renderFeatures() {
     if (st.mode === 'anyvsnone') {
       html += '<div class="ts-row"><span class="lab">Cutoff</span>' + cutoffControl(f.key, st) + '</div>';
     }
+    html += '</div>';
     html += '<div class="ts-row"><span class="lab">How strongly</span><div class="ts-btns">'
       + btn('str', f.key, '1', 'a little', Math.abs(st.matters - 1) < 0.05)
       + btn('str', f.key, '2', 'somewhat', Math.abs(st.matters - 2) < 0.05)
@@ -1001,6 +1013,12 @@ function renderFeatures() {
     host.querySelectorAll('[data-dir],[data-mode],[data-str]').forEach(function(b) {
       b.addEventListener('mouseenter', function() { showPreview(b); });
       b.addEventListener('mouseleave', function() { endPreview(b); });
+    });
+    var advBtn = document.getElementById('ts-adv-btn-' + f.key);
+    if (advBtn) advBtn.addEventListener('click', function() {
+      var body = document.getElementById('ts-adv-body-' + f.key);
+      var open = body.classList.toggle('open');
+      advBtn.firstChild.nodeValue = (open ? '▾' : '▸') + ' Advanced settings';
     });
     var openBtn = document.getElementById('ts-except-open');
     if (openBtn) openBtn.addEventListener('click', function() { tsExceptOpen[f.key] = true; refresh(); });
