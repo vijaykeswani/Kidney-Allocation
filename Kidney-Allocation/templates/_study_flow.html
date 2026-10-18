@@ -1,0 +1,79 @@
+{# Shared behaviour for the model screen: step toggles, 1–7 rating, apply, reset, lock-in. Each page passes in what is model-specific. #}
+<script>
+var StudyFlow = (function() {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+
+  function toggleStep(n, onOpen) {
+    var body = $('ts-step' + n + '-body'), card = $('ts-step' + n + '-toggle'), chev = $('ts-step' + n + '-chevron');
+    if (!body) return;
+    var opening = !body.classList.contains('open');
+    body.classList.toggle('open', opening); card.classList.toggle('open', opening); chev.classList.toggle('open', opening);
+    if (opening && onOpen) onOpen(n);
+  }
+  function steps(onOpen) {
+    [1, 2].forEach(function(n) { var t = $('ts-step' + n + '-toggle'); if (t) t.addEventListener('click', function() { toggleStep(n, onOpen); }); });
+  }
+
+  // cfg: {applyUrl, resetUrl, rateUrl, continueUrl, currentScore, getPayload(), isDirty(), beforeApply(), logEvent(name, detail)}
+  function init(cfg) {
+    var log = cfg.logEvent || function() {};
+    function postApply() {
+      if (cfg.beforeApply) cfg.beforeApply();
+      return fetch(cfg.applyUrl, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(cfg.getPayload())})
+        .then(function(r) {
+          if (!r.ok) return r.json().catch(function() { return {}; }).then(function(b) { throw new Error(b.error || 'Save failed'); });
+          return r.json();
+        });
+    }
+    var apply = $('ts-apply');
+    apply.addEventListener('click', function() {
+      apply.disabled = true; apply.textContent = 'Saving\u2026';
+      postApply().then(function(data) {
+        if (data && data.redirect) window.location.href = data.redirect;
+        else { apply.disabled = false; apply.textContent = 'Apply changes'; }
+      }).catch(function(err) {
+        apply.disabled = false; apply.textContent = (err && err.message) ? err.message : 'Apply changes \u2014 try again';
+        setTimeout(function() { apply.textContent = 'Apply changes'; }, 4000);
+      });
+    });
+    $('ts-reset').addEventListener('click', function() {
+      if (!confirm('Reset to the original model trained from your answers? This discards your edits.')) return;
+      fetch(cfg.resetUrl, {method: 'POST'}).then(function(r) { return r.json(); }).then(function(d) { if (d && d.redirect) window.location.href = d.redirect; });
+    });
+    var row = $('ts-score-row'), score = cfg.currentScore;
+    for (var i = 1; i <= 7; i++) {
+      (function(n) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'ts-btn' + (score === n ? ' active' : ''); b.textContent = String(n);
+        b.addEventListener('click', function() {
+          score = n;
+          Array.prototype.forEach.call(row.children, function(c, k) { c.classList.toggle('active', k + 1 === n); });
+          fetch(cfg.rateUrl, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({score: n})}).catch(function() {});
+        });
+        row.appendChild(b);
+      })(i);
+    }
+    $('ts-continue').addEventListener('click', function() {
+      var b = this; b.disabled = true;
+      var go = function() { window.location.href = cfg.continueUrl; };
+      var dirty = cfg.isDirty();
+      log('lock_in_clicked', {unsaved_edits: dirty});
+      if (dirty) postApply().then(go).catch(go); else go();
+    });
+  }
+  // Final page: the match panel reports how the LOCKED model did on the choices that were held back.
+  function finalHeader(c) {          // c: {n, current, baseline, edited, arm}
+    var who = c.arm === 'control' ? 'The AI model we trained on your first answers' : 'Your locked-in model';
+    $('ts-match-line').textContent = c.n ? (who + ' correctly predicted ' + c.current + ' of your ' + c.n + ' new choices.') : '';
+    var sub;
+    if (c.edited && c.baseline !== null) {
+      sub = c.baseline !== c.current
+        ? ('Before your edits it would have predicted ' + c.baseline + ' of ' + c.n + '. Tap to see each new choice.')
+        : ('Your edits didn\u2019t change how many it predicted. Tap to see each new choice.');
+    } else sub = 'Tap to see each of your new choices and what the model predicted.';
+    $('ts-match-sub').textContent = sub;
+  }
+  return {toggleStep: toggleStep, steps: steps, init: init, finalHeader: finalHeader};
+})();
+</script>

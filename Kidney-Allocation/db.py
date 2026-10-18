@@ -194,6 +194,10 @@ _ADDED_USER_COLUMNS = [
     # End-of-study trust/alignment/demographics questionnaire — one JSON blob
     # per participant, same storage pattern as fft_override.
     ("survey_json",         "TEXT"),
+    # The model the participant is locked into when they leave the model screen:
+    # their edited model (treatment arms) or the unedited Part-1 model (control).
+    # Part 2 then tests THIS model on fresh answers; it is never retrained.
+    ("frozen_model_json",   "TEXT"),
 ]
 
 
@@ -392,6 +396,30 @@ def get_fft_override(username):
 def delete_fft_override(username):
     with _connect() as conn:
         conn.execute("UPDATE users SET fft_override=NULL WHERE username=?", (username,))
+
+
+def set_frozen_model(username, frozen):
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO users (username, frozen_model_json) VALUES (?, ?) "
+            "ON CONFLICT(username) DO UPDATE SET frozen_model_json = excluded.frozen_model_json",
+            (username, json.dumps(frozen)),
+        )
+
+
+def get_frozen_model(username):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT frozen_model_json FROM users WHERE username=?", (username,)
+        ).fetchone()
+    return json.loads(row["frozen_model_json"]) if row and row["frozen_model_json"] else None
+
+
+def count_events(username, event):
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM ui_events WHERE username=? AND event=?", (username, event)
+        ).fetchone()[0]
 
 
 def set_survey_answers(username, answers):

@@ -1,26 +1,98 @@
 {% extends "base.html" %}
+{% from "_macros.html" import info %}
 {% block extra_head %}
 <style>
-.final-tree-card {
-  background: #fff; border: 1px solid var(--border); border-radius: 16px;
-  padding: 28px 26px 22px;
-  box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.04);
-}
-.final-tree-card svg { display: block; width: 100%; }
+.final-tree-card { background:#fff; border:1px solid var(--border); border-radius:16px; padding:28px 26px 22px;
+  box-shadow:0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.04); }
+.final-tree-card svg { display:block; width:100%; }
+.holdout-panel { display:flex; align-items:center; gap:18px; background:#fff; border:1px solid var(--border);
+  border-radius:12px; padding:18px 20px; margin:0 0 14px; }
+.holdout-num { flex-shrink:0; width:52px; height:52px; border-radius:12px; background:var(--a-soft); color:var(--a);
+  font-size:24px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.holdout-line { font-size:15px; font-weight:600; }
+.holdout-sub { font-size:13px; color:var(--text-secondary); margin-top:2px; }
+.case-chips { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 12px; }
+.case-chip { width:34px; height:34px; border-radius:7px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.case-chip.agree { background:var(--a-soft); color:var(--a); } .case-chip.disagree { background:var(--b-soft); color:var(--b); }
+.case-legend { display:flex; gap:16px; font-size:12px; color:var(--text-secondary); margin-bottom:18px; }
+.case-legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+details.case { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; background:#fff; }
+details.case summary { padding:11px 14px; cursor:pointer; font-size:14px; list-style:none; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+details.case summary::-webkit-details-marker { display:none; }
+details.case .tag { font-weight:700; font-size:12.5px; }
+details.case .tag.agree { color:var(--a); } details.case .tag.disagree { color:var(--b); }
+.case-table { width:100%; border-collapse:collapse; font-size:13.5px; margin:0 0 6px; }
+.case-table th, .case-table td { padding:6px 14px; text-align:left; border-top:1px solid var(--border); }
+.case-table th { color:var(--text-secondary); font-weight:500; }
+.why { margin: 4px 14px 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.why-head { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.why-steps { margin: 0 0 6px; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
+.why-steps li.skipped { color: var(--text-muted); }
+.why-steps li.applies { color: var(--text); font-weight: 500; }
+.why-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; }
 </style>
 {% endblock %}
 {% block content %}
-<div class="eyebrow" style="margin-bottom:8px;">Part 2 · complete</div>
-<h2>Here's your updated model</h2>
+<div class="eyebrow" style="margin-bottom:8px;">Part 2 &middot; complete</div>
+<h2>{% if arm == 'control' %}Here&rsquo;s the AI model we trained on your first answers{% else %}Here&rsquo;s your locked-in model{% endif %}</h2>
 <div class="muted" style="font-size:15px; margin-bottom:20px; line-height:1.6;">
-  This reflects all your choices, including the extra scenarios you just answered.
+  {% if arm == 'control' %}
+  This AI model was built only from your first answers. The choices you made afterwards were kept back to test it.
+  {% else %}
+  This is the model you locked in. It was never retrained &mdash; the choices you made afterwards were kept back to test it.
+  {% endif %}
 </div>
 
+<div class="holdout-panel">
+  <div class="holdout-num">{{ n_matches }}</div>
+  <div>
+    <div class="holdout-line">
+      {% if arm == 'control' %}The AI model we trained on your first answers{% else %}Your locked-in model{% endif %}
+      correctly predicted {{ n_matches }} of your {{ n_total }} new choices.
+    </div>
+    <div class="holdout-sub">
+      {% if edited %}
+        {% if baseline_matches != n_matches %}Before your edits it would have predicted {{ baseline_matches }} of {{ n_total }}.
+        {% else %}Your edits didn&rsquo;t change how many it predicted.{% endif %}
+      {% else %}Open any case below to see the two patients and what the model predicted.{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="case-chips">
+  {% for c in cases %}<div class="case-chip {{ 'agree' if c.match else 'disagree' }}">{{ c.n }}</div>{% endfor %}
+</div>
+<div class="case-legend">
+  <span><span class="sw" style="background:var(--a-soft); border:1px solid var(--a);"></span>model predicted your choice</span>
+  <span><span class="sw" style="background:var(--b-soft); border:1px solid var(--b);"></span>model predicted the other patient</span>
+</div>
+{% for c in cases %}
+<details class="case" {{ '' if c.match else 'open' }}>
+  <summary>
+    <strong>Case {{ c.n }}</strong>
+    <span>You chose Patient {{ c.choice }} &middot; model predicted Patient {{ c.pred }}</span>
+    <span class="tag {{ 'agree' if c.match else 'disagree' }}">{{ '\u2713 matches' if c.match else '\u2717 differs' }}</span>
+  </summary>
+  <table class="case-table">
+    <tr><th></th><th>Patient A</th><th>Patient B</th></tr>
+    {% for p in features %}
+    <tr><th>{{ feature_labels.get(p, p) }}{{ info(feature_descriptions.get(p)) }}</th>
+        <td>{{ c.A[p]|int if c.A[p] is not none else '' }}</td><td>{{ c.B[p]|int if c.B[p] is not none else '' }}</td></tr>
+    {% endfor %}
+  </table>
+  <div class="why">
+    <div class="why-head">{{ c.explain.headline }}</div>
+    <ol class="why-steps">{% for st in c.explain.steps %}<li class="{{ 'applies' if st.applies else 'skipped' }}">{{ st.text }}</li>{% endfor %}</ol>
+    {% if c.explain.note %}<div class="why-note">{{ c.explain.note }}</div>{% endif %}
+  </div>
+</details>
+{% endfor %}
+
+<div class="spacer-24"></div>
 <div class="final-tree-card">
 {{ svg | safe }}
 </div>
 
-<div style="margin:28px 0;">
-  <a class="btn btn-primary" href="{{ survey_url }}">Continue to a few final questions →</a>
-</div>
+<div class="spacer-24"></div>
+<a class="btn btn-primary" href="{{ survey_url }}">Continue to a few final questions &rarr;</a>
 {% endblock %}

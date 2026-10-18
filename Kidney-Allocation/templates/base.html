@@ -10,7 +10,8 @@
   --border:#e2e8f0; --border-strong:#cbd5e1;
   --text:#0f172a; --text-secondary:#475569; --text-muted:#94a3b8;
   --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff;
-  --a:#b91c1c; --a-soft:#fef2f2; --b:#1d4ed8; --b-soft:#eff6ff;
+  --a:#0f766e; --a-soft:#d8ecea; --b:#b1622f; --b-soft:#f6e7dd;   /* model-viewing stages: A teal, B orange (test_palette.py guards these) */
+  --neutral:#334155; --neutral-soft:#f1f5f9;                       /* preference-elicitation stage: neither patient is colour-coded */
   --success:#15803d; --success-soft:#f0fdf4;
   --warning:#b45309; --warning-soft:#fffbeb;
   /* Aliases so twostage.html, which uses the tree editor's token names,
@@ -20,6 +21,20 @@
   --text-primary: var(--text);
 }
 *{box-sizing:border-box;}
+
+/* (i) icon: hover, focus or tap shows what a factor means and how it is scaled */
+.info{display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px;
+  border-radius:50%; border:1px solid var(--border-strong); background:#fff; color:var(--text-muted);
+  font-size:11px; font-weight:700; font-style:normal; font-family:Georgia,serif; line-height:1;
+  cursor:help; margin-left:6px; position:relative; vertical-align:middle;
+  text-transform:none; letter-spacing:0;}
+.info:hover,.info:focus{color:var(--accent); border-color:var(--accent); outline:none;}
+.info::after{content:attr(data-tip); position:absolute; left:50%; bottom:calc(100% + 8px);
+  transform:translateX(-50%); width:max-content; max-width:260px; background:#0f172a; color:#fff;
+  font-family:-apple-system,"Segoe UI",Roboto,sans-serif; font-size:12.5px; font-weight:400; line-height:1.45;
+  padding:8px 10px; border-radius:8px; opacity:0; pointer-events:none; transition:opacity .12s;
+  z-index:300; white-space:normal; text-align:left;}
+.info:hover::after,.info:focus::after{opacity:1;}
 html,body{background:var(--bg); color:var(--text); margin:0;
   font-family:-apple-system,"Segoe UI",Roboto,sans-serif; font-size:16px;}
 .wrap{max-width:900px; margin:0 auto; padding:36px 40px 48px;}
@@ -76,11 +91,11 @@ input[type="text"]:focus{
 /* Scenario cards */
 .scenario-grid{display:grid; grid-template-columns:1fr 1fr; gap:24px;}
 .patient-card{border-radius:12px; padding:24px 24px 26px 22px;}
-.patient-card.a{background:var(--a-soft); border-left:4px solid var(--a);}
-.patient-card.b{background:var(--b-soft); border-left:4px solid var(--b);}
+/* While people are stating their own preferences both patients look the same, so colour can't nudge the choice. */
+.patient-card.a, .patient-card.b{background:var(--neutral-soft); border-left:4px solid var(--neutral);}
 .patient-label{font-weight:700; font-size:15px; letter-spacing:.04em;
   text-transform:uppercase; margin-bottom:24px;}
-.patient-label.a{color:var(--a);} .patient-label.b{color:var(--b);}
+.patient-label.a, .patient-label.b{color:var(--neutral);}
 .feature-row{margin-bottom:18px;}
 .feature-name{font-size:14px; color:var(--text-secondary); text-transform:uppercase;
   letter-spacing:.07em; margin-bottom:5px;}

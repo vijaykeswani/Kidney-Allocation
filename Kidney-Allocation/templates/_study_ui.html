@@ -1,0 +1,73 @@
+{#
+  Shared page furniture for the model screen — used by the feature-list v2 page AND the decision-tree page, so the
+  sequence (match panel → steps → plain-words summary → apply/reset → rating → lock-in) is identical by construction.
+  Only what goes INSIDE each step differs: that is the model being viewed and edited.
+
+    {% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue %}
+#}
+{# The heading for the view/edit phase (not shown on the final page). #}
+{% macro page_header() -%}
+<div class="study-header study-ui">
+  <h2 class="study-h">We’ve built an AI model from your answers so far</h2>
+  <p class="study-sub">It tries to predict the choices you would make in new cases. Take some time to look it over, and use the controls below to change anything that doesn’t match how you really decide.</p>
+</div>
+{%- endmacro %}
+
+{% macro match_panel() -%}
+<button class="ts-match-panel study-ui" id="ts-match-panel" type="button">
+  <div class="ts-match-num" id="ts-match-num">–</div>
+  <div class="ts-match-body">
+    <div class="ts-match-line" id="ts-match-line"></div>
+    <div class="ts-match-sub" id="ts-match-sub"></div>
+  </div>
+  <div class="ts-match-chevron">→</div>
+</button>
+{%- endmacro %}
+
+{# a collapsible step: one-line overview first, click to expand. The body is whatever the calling page passes in. #}
+{% macro step(n, title) -%}
+<button class="ts-step-card study-ui" id="ts-step{{ n }}-toggle" type="button">
+  <div class="ts-step-card-head">
+    <div class="ts-step-title">{{ title }}</div>
+    <div class="ts-step-preview" id="ts-step{{ n }}-preview"></div>
+  </div>
+  <div class="ts-step-chevron" id="ts-step{{ n }}-chevron">▾</div>
+</button>
+<div class="ts-step-body" id="ts-step{{ n }}-body">{{ caller() }}</div>
+{%- endmacro %}
+
+{% macro summary_card() -%}
+<div class="ts-summary-card study-ui">
+  <div class="ts-summary-label">Your whole model, in plain words</div>
+  <div class="ts-summary-text" id="ts-summary-text"></div>
+</div>
+{%- endmacro %}
+
+{% macro actions(has_override) -%}
+<div class="study-actions study-ui">
+  <button class="btn btn-secondary study-ui" id="ts-reset" type="button" {% if not has_override %}style="display:none"{% endif %}>↺ Reset to original model</button>
+  <button class="btn btn-primary study-ui" id="ts-apply" type="button">Apply changes</button>
+</div>
+{%- endmacro %}
+
+{% macro rating() -%}
+<hr class="study-sep">
+<div class="study-ui">
+  <div class="study-rating-title" id="ts-rating-title">How well does this match your thinking?</div>
+  <div class="study-rating-sub">1 = not at all &nbsp;&nbsp;·&nbsp;&nbsp; 7 = perfectly</div>
+  <div class="study-rating-row" id="ts-score-row"></div>
+</div>
+{%- endmacro %}
+
+{% macro lock_in() -%}
+<div class="ts-lock-note study-ui">When you continue, your model is <b>locked in</b> and won’t change again. Next you’ll make a few more choices, which test how well it predicts you on cases it has never seen. Any edits you haven’t applied yet are saved first.</div>
+<div class="study-lock-row study-ui">
+  <button class="btn btn-primary study-ui" id="ts-continue" type="button">Lock in my model and continue →</button>
+</div>
+{%- endmacro %}
+
+{% macro final_continue(survey_url) -%}
+<div style="margin:28px 0;">
+  <a class="btn btn-primary study-ui" href="{{ survey_url }}">Continue to a few final questions →</a>
+</div>
+{%- endmacro %}

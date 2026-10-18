@@ -1,0 +1,258 @@
+{#
+  The "See how your model performs" overlay — ONE implementation shared by the decision-tree page and the feature-list
+  pages, so the two experiences cannot drift apart. Only the model differs; a page supplies it through an adapter:
+
+    window.CaseAdapter = {
+      features:  [{key, label}, ...],                  // factors, in display order
+      ranges:    {key: {min, max}},
+      valuesOf:  function(key) -> sorted allowed values or null,
+      past:      function() -> [{A, B, choice}],       // the participant's cases (A/B: {key: value})
+      predict:   function(a, b) -> {choice: 'A'|'B', how: 'strongly' | 'decided at step 2' | ...},
+      inUse:     function(key) -> bool,                // is this factor part of the model right now? (bold row)
+      explain:   function(a, b, userChoice) -> html,   // the model-specific explanation
+      infoIcon:  function(key) -> html,
+      logEvent:  function(name, detail)
+    };
+    CaseOverlay.open();
+
+  Jinja: `final_mode` switches the wording for the final page (cases are the Part-2 hold-out).
+#}
+<style>
+.co-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 200; }
+.co-dialog { background: #fff; border-radius: 16px; width: 100%; max-width: 780px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(15,23,42,.25); }
+.co-header { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.co-title { font-size: 16px; font-weight: 600; flex: 1; }
+.co-close { font-size: 15px; color: var(--text-muted); background: none; border: none; cursor: pointer; width: 28px; height: 28px; border-radius: 6px; }
+.co-close:hover { background: var(--surface); }
+.co-body { padding: 18px 20px 24px; overflow-y: auto; }
+.co-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5; }
+.co-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.co-chip { aspect-ratio: 1; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; border: 2px solid transparent; font-family: inherit; }
+.co-legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 18px; flex-wrap: wrap; }
+.co-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.co-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.co-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.co-card-title { font-size: 16px; font-weight: 600; }
+.co-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.co-pat { font-weight: 600; margin-bottom: 6px; }
+.co-pat.a { color: var(--patient-a); } .co-pat.b { color: var(--patient-b); }
+.co-prow { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.co-prow.off { color: var(--text-secondary); } .co-prow.on { font-weight: 600; }
+.co-verdict { display: flex; gap: 24px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.co-verdict .lbl { font-size: 12px; color: var(--text-muted); } .co-verdict .val { font-weight: 600; }
+.co-verdict .ok { color: var(--patient-a); font-weight: 600; } .co-verdict .no { color: var(--patient-b); font-weight: 600; }
+.co-btn { font-size: 13px; padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border); background: #fff; cursor: pointer; color: var(--text); font-family: inherit; }
+.co-btn:hover { background: var(--surface); }
+/* expanders: "See explanation" and "Try your own case" */
+.co-why-toggle { margin-top: 12px; font-size: 13px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px 0; font-family: inherit; font-weight: 600; }
+.co-why-toggle:hover { text-decoration: underline; }
+.co-own { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 6px; }
+.co-own-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; background: none; border: none; cursor: pointer; padding: 12px 2px; font-family: inherit; text-align: left; }
+.co-own-title { font-size: 16px; font-weight: 600; color: var(--text); }
+.co-chev { color: var(--text-muted); font-size: 15px; transition: transform .15s; }
+.co-own-toggle[aria-expanded="true"] .co-chev { transform: rotate(90deg); }
+.co-own-body { padding-top: 4px; }
+.co-slider { margin-bottom: 10px; }
+.co-slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+.co-slider input[type=range] { width: 100%; accent-color: var(--accent); }
+/* explanations (both models share this look) */
+.why { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.why-head { font-size: 14.5px; font-weight: 600; line-height: 1.5; margin-bottom: 10px; }
+.why-steps { margin: 0 0 6px; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
+.why-steps li.skipped { color: var(--text-muted); } .why-steps li.applies { color: var(--text); font-weight: 500; }
+.why-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin-top: 10px; padding: 10px 12px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
+.why-legend { display: grid; grid-template-columns: minmax(110px, 1.1fr) 82px 1.4fr 130px; gap: 10px; font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px; }
+.why-legend .mid { display: flex; justify-content: space-between; }
+.why-legend .a { color: var(--patient-a); } .why-legend .b { color: var(--patient-b); }
+.why-row { display: grid; grid-template-columns: minmax(110px, 1.1fr) 82px 1.4fr 130px; gap: 10px; align-items: center; font-size: 13.5px; padding: 5px 0; }
+.why-row.quiet { color: var(--text-muted); } .why-row.decides .lab { font-weight: 700; }
+.why-row .vals { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--text-secondary); }
+.why-row .note { font-size: 12.5px; color: var(--text-secondary); }
+.why-bar { display: grid; grid-template-columns: 1fr 1fr; height: 10px; background: var(--surface-alt); border-radius: 5px; overflow: hidden; position: relative; }
+.why-bar::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border-strong); }
+.why-bar .h { display: flex; } .why-bar .h.l { justify-content: flex-end; } .why-bar .h i { display: block; height: 100%; }
+.why-bar .h.l i { background: var(--patient-a); } .why-bar .h.r i { background: var(--patient-b); }
+.why-off { font-size: 12.5px; color: var(--text-muted); margin-top: 6px; }
+@media (max-width: 640px) { .co-cols { grid-template-columns: 1fr; } .why-row, .why-legend { grid-template-columns: 1fr; } }
+</style>
+
+<div class="co-backdrop" id="co-backdrop">
+  <div class="co-dialog" role="dialog" aria-modal="true" aria-labelledby="co-title">
+    <div class="co-header">
+      <div class="co-title" id="co-title">{% if final_mode %}See how your model did on your new choices{% else %}See how your model performs{% endif %}</div>
+      <button class="co-close" id="co-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="co-body">
+      <div class="co-desc">
+        Each square is one of your <span id="co-total"></span> {% if final_mode %}new choices (made after your model was locked in){% else %}cases{% endif %}.
+        Tap any square to see that pair and what your model predicts.
+      </div>
+      <div class="co-grid" id="co-grid"></div>
+      <div class="co-legend">
+        <span><span class="sw" style="background:var(--patient-a-soft); border:1px solid var(--patient-a);"></span>agrees with your choice</span>
+        <span><span class="sw" style="background:var(--patient-b-soft); border:1px solid var(--patient-b);"></span>disagrees</span>
+      </div>
+      <div id="co-detail"></div>
+
+      <div class="co-own">
+        <button class="co-own-toggle" id="co-own-toggle" type="button" aria-expanded="false">
+          <span class="co-own-title">Try your own case</span><span class="co-chev">▸</span>
+        </button>
+        <div class="co-own-body" id="co-own-body" style="display:none">
+          <div class="co-desc">Set up any two patients and see how your model would decide between them.</div>
+          <div id="co-builder"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var CaseOverlay = (function() {
+  'use strict';
+  var idx = 0, whyOpen = false, builderVals = null, customTimer = null;
+  function A() { return window.CaseAdapter; }
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+  function predictions() {
+    return A().past().map(function(sc) {
+      var p = A().predict(sc.A, sc.B);
+      return {sc: sc, choice: p.choice, how: p.how, agree: p.choice === sc.choice};
+    });
+  }
+
+  function renderGrid() {
+    var preds = predictions(), grid = $('co-grid');
+    grid.innerHTML = '';
+    preds.forEach(function(p, i) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'co-chip'; b.textContent = i + 1;
+      b.style.borderColor = i === idx ? 'var(--text)' : 'transparent';
+      b.style.background = p.agree ? 'var(--patient-a-soft)' : 'var(--patient-b-soft)';
+      b.style.color = p.agree ? 'var(--patient-a)' : 'var(--patient-b)';
+      b.addEventListener('click', function() { idx = i; renderGrid(); renderDetail(); });
+      grid.appendChild(b);
+    });
+    $('co-total').textContent = preds.length;
+  }
+
+  function rows(patient) {
+    return A().features.map(function(f) {
+      return '<div class="co-prow ' + (A().inUse(f.key) ? 'on' : 'off') + '"><span>' + esc(f.label) + A().infoIcon(f.key) + '</span><span>' + esc(patient[f.key]) + '</span></div>';
+    }).join('');
+  }
+
+  // "See explanation" expander: collapsed by default; once opened it stays open while stepping through cases.
+  function whyBlock(a, b, userChoice) {
+    return '<div class="co-why-wrap"><button type="button" class="co-why-toggle" aria-expanded="' + whyOpen + '">'
+      + (whyOpen ? 'Hide explanation \u25be' : 'See explanation \u25b8') + '</button>'
+      + '<div class="co-why-body"' + (whyOpen ? '' : ' style="display:none"') + '>' + A().explain(a, b, userChoice) + '</div></div>';
+  }
+  function syncWhy() {
+    document.querySelectorAll('#co-backdrop .co-why-toggle').forEach(function(t) {
+      t.setAttribute('aria-expanded', whyOpen); t.textContent = whyOpen ? 'Hide explanation \u25be' : 'See explanation \u25b8';
+    });
+    document.querySelectorAll('#co-backdrop .co-why-body').forEach(function(b) { b.style.display = whyOpen ? '' : 'none'; });
+  }
+  function wireWhy(root) {
+    root.querySelectorAll('.co-why-toggle').forEach(function(t) {
+      t.addEventListener('click', function() { whyOpen = !whyOpen; syncWhy(); A().logEvent('explanation_toggled', {open: whyOpen}); });
+    });
+  }
+
+  function renderDetail() {
+    var preds = predictions(), host = $('co-detail');
+    if (!preds.length) { host.innerHTML = ''; return; }
+    var p = preds[idx];
+    A().logEvent('case_viewed', {case: idx + 1, model_agrees: p.agree});
+    var html = '<div class="co-card"><div class="co-card-head"><div class="co-card-title">Case ' + (idx + 1) + '</div><div style="display:flex; gap:8px;">'
+      + '<button type="button" class="co-btn" id="co-prev">\u2190 Prev</button>'
+      + '<button type="button" class="co-btn" id="co-nextdis">Next disagreement</button>'
+      + '<button type="button" class="co-btn" id="co-next">Next \u2192</button></div></div>'
+      + '<div class="co-cols"><div><div class="co-pat a">\u25cf Patient A</div>' + rows(p.sc.A) + '</div>'
+      + '<div><div class="co-pat b">\u25cf Patient B</div>' + rows(p.sc.B) + '</div></div>'
+      + '<div class="co-verdict">'
+      + '<div><div class="lbl">You chose</div><div class="val">Patient ' + esc(p.sc.choice) + '</div></div>'
+      + '<div><div class="lbl">Your model would choose</div><div class="val">Patient ' + esc(p.choice) + ' \u00b7 ' + esc(p.how) + '</div></div>'
+      + '<div class="' + (p.agree ? 'ok' : 'no') + '">' + (p.agree ? '\u2713 matches your choice' : '\u2717 differs from your choice') + '</div></div>'
+      + whyBlock(p.sc.A, p.sc.B, p.sc.choice) + '</div>';
+    host.innerHTML = html;
+    wireWhy(host);
+    $('co-prev').addEventListener('click', function() { idx = (idx - 1 + preds.length) % preds.length; renderGrid(); renderDetail(); });
+    $('co-next').addEventListener('click', function() { idx = (idx + 1) % preds.length; renderGrid(); renderDetail(); });
+    $('co-nextdis').addEventListener('click', function() {
+      for (var i = 1; i <= preds.length; i++) { var j = (idx + i) % preds.length; if (!preds[j].agree) { idx = j; break; } }
+      renderGrid(); renderDetail();
+    });
+  }
+
+  // ---- "Try your own case"
+  function renderBuilder() {
+    var feats = A().features;
+    if (!builderVals) {
+      builderVals = {A: {}, B: {}};
+      feats.forEach(function(f) {
+        var r = A().ranges[f.key], vs = A().valuesOf(f.key), mid = vs ? vs[Math.floor(vs.length / 2)] : Math.round((r.min + r.max) / 2);
+        builderVals.A[f.key] = mid; builderVals.B[f.key] = mid;
+      });
+    }
+    var html = '<div class="co-cols">';
+    ['A', 'B'].forEach(function(side) {
+      html += '<div><div class="co-pat ' + side.toLowerCase() + '">\u25cf Patient ' + side + '</div>';
+      feats.forEach(function(f) {
+        var r = A().ranges[f.key], vs = A().valuesOf(f.key);
+        html += '<div class="co-slider"><div class="co-slider-head"><span>' + esc(f.label) + A().infoIcon(f.key) + '</span>'
+          + '<span id="co-b-' + side + '-' + f.key + '" style="font-weight:600;">' + esc(builderVals[side][f.key]) + '</span></div>'
+          + (vs ? '<input type="range" min="0" max="' + (vs.length - 1) + '" step="1" value="' + Math.max(0, vs.indexOf(builderVals[side][f.key])) + '" data-idx="1" '
+                : '<input type="range" min="' + r.min + '" max="' + r.max + '" value="' + builderVals[side][f.key] + '" ')
+          + 'data-side="' + side + '" data-key="' + f.key + '"></div>';
+      });
+      html += '</div>';
+    });
+    html += '</div><div id="co-verdict" class="co-card" style="margin-top:14px;"></div>';
+    $('co-builder').innerHTML = html;
+    $('co-builder').querySelectorAll('input[type=range]').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var side = inp.getAttribute('data-side'), key = inp.getAttribute('data-key');
+        var v = inp.hasAttribute('data-idx') ? A().valuesOf(key)[parseInt(inp.value, 10)] : parseInt(inp.value, 10);
+        builderVals[side][key] = v; $('co-b-' + side + '-' + key).textContent = v;
+        renderVerdict(); logCustomSoon();
+      });
+    });
+    renderVerdict();
+  }
+  function renderVerdict() {
+    var a = builderVals.A, b = builderVals.B, p = A().predict(a, b);
+    $('co-verdict').innerHTML = '<div style="font-size:15px;">Your model would choose <b style="color:var(--patient-' + p.choice.toLowerCase() + ');">Patient '
+      + p.choice + '</b>, ' + esc(p.how) + '.</div>' + whyBlock(a, b, null);
+    wireWhy($('co-verdict'));
+  }
+  function logCustomSoon() {      // one event per pair the participant actually looked at (after they pause)
+    clearTimeout(customTimer);
+    customTimer = setTimeout(function() {
+      A().logEvent('custom_scenario_tried', {A: builderVals.A, B: builderVals.B, model_choice: A().predict(builderVals.A, builderVals.B).choice});
+    }, 1200);
+  }
+
+  function open() {
+    A().logEvent('test_model_opened', {});
+    $('co-backdrop').style.display = 'flex';
+    idx = 0;
+    $('co-own-body').style.display = 'none'; $('co-own-toggle').setAttribute('aria-expanded', 'false');
+    renderGrid(); renderDetail();
+  }
+  function close() { $('co-backdrop').style.display = 'none'; }
+
+  $('co-close').addEventListener('click', close);
+  $('co-backdrop').addEventListener('click', function(e) { if (e.target === this) close(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(); });
+  $('co-own-toggle').addEventListener('click', function() {
+    var opening = this.getAttribute('aria-expanded') !== 'true';
+    this.setAttribute('aria-expanded', opening); $('co-own-body').style.display = opening ? '' : 'none';
+    if (opening) { renderBuilder(); A().logEvent('custom_builder_opened', {}); }
+  });
+
+  return {open: open, close: close, _state: function() { return {idx: idx, whyOpen: whyOpen, builderVals: builderVals}; }};
+})();
+</script>

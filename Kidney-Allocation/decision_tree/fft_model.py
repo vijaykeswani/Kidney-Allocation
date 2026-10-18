@@ -126,6 +126,13 @@ class FastFrugalTree:
         self.min_support_frac  = float(min_support_frac)
         self.min_support_count = int(min_support_count)
         self.laplace_alpha     = float(laplace_alpha)
+        # Features whose direction features.json fixes ("favor" -> higher is better).
+        # Without this, ~20 noisy answers can make e.g. "more life years" look like a
+        # reason AGAINST a patient purely by chance.
+        self.direction_priors = {
+            k: (v["direction_prior"] == "favor")
+            for k, v in features.FEATURE_BY_KEY.items() if v.get("direction_prior")
+        }
         self.nodes = []
         self.default_class = 0
         self.default_support = 0.0
@@ -139,7 +146,7 @@ class FastFrugalTree:
         if len(u) <= 1:
             return np.array([float(u[0]) if len(u) else 0.0])
         # Round midpoints to integers — all features are integer-valued
-        mids = np.round((u[:-1] + u[1:]) / 2.0)
+        mids = np.ceil((u[:-1] + u[1:]) / 2.0)   # ceil, not round: np.round(2.5) is 2 (banker's rounding), which skips the split between 2 and 3
         cands = np.unique(np.concatenate([mids, [0.0]]))
         if len(cands) > cap:
             idx = np.linspace(0, len(cands) - 1, cap).astype(int)
@@ -196,11 +203,16 @@ class FastFrugalTree:
                     votes_lower  = int(np.sum((signs > 0) & (yexit == 0))
                                        + np.sum((signs < 0) & (yexit == 1)))
                     prefer_higher = votes_higher >= votes_lower
+                    prior = self.direction_priors.get(self.feature_names[fidx].replace("_diff", ""))
+                    if prior is not None:
+                        prefer_higher = prior      # features.json fixes this direction
                     # predicted exit_class = what prefer_higher means per-row
                     pred_exit = np.where((signs > 0) == prefer_higher, 1, 0)
                     exit_class = int(round(yexit.mean()))  # kept for stats/compat
                     n_correct = int((yexit == pred_exit).sum())
                     score = n_correct - (n_exit - n_correct)
+                    if prior is not None and score <= 0:
+                        continue   # a split that only works against the fixed direction isn't evidence for it
                     purity = n_correct / n_exit
                     # Laplace-smoothed purity used only for ranking: down-weights
                     # tiny high-purity splits so larger robust ones win ties.

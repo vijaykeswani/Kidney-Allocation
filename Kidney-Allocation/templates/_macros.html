@@ -1,0 +1,4 @@
+{# (i) icon for a factor's definition/scale. Usage: {% from "_macros.html" import info %}{{ info(descriptions.get(key)) }} #}
+{% macro info(text) -%}
+{%- if text %}<span class="info" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">i</span>{% endif -%}
+{%- endmacro %}

@@ -1,0 +1,84 @@
+{#
+  Shared look of the study pages (feature-list v2 AND decision tree): match panel, step cards, summary card, buttons,
+  rating row, lock-in note. One stylesheet, so the two pages cannot drift apart. `.study-ui` pins the colour tokens
+  these pieces use, so they render identically even on a page with different base styles.
+#}
+<style>
+.study-ui { --text:#0f172a; --text-secondary:#475569; --text-muted:#94a3b8; --surface:#f8fafc; --surface-alt:#f1f5f9;
+  --border:#e2e8f0; --border-strong:#cbd5e1; --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff;
+  --patient-a:#0f766e; --patient-a-soft:#d8ecea; --patient-b:#b1622f; --patient-b-soft:#f6e7dd;
+  font-family:-apple-system,"Segoe UI",Roboto,sans-serif; }
+.study-ui .btn, .btn.study-ui { font-size:16px; padding:11px 22px; min-height:46px; border-radius:10px; font-weight:500;
+  border:1px solid var(--border); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-family:inherit;
+  transition:background-color .15s ease,border-color .15s ease; text-decoration:none; }
+.btn.study-ui.btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.btn.study-ui.btn-primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); }
+.btn.study-ui.btn-secondary { background:#fff; color:var(--text); border-color:var(--border); }
+.btn.study-ui.btn-secondary:hover { background:var(--surface); border-color:var(--border-strong); }
+.btn.study-ui:disabled { opacity:.6; cursor:default; }
+.study-header { margin: 0 0 22px; }
+.study-h { font-size: 1.5rem; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 8px; color: var(--text); }
+.study-sub { font-size: 15px; line-height: 1.6; color: var(--text-secondary); margin: 0; }
+.study-actions { display:flex; gap:12px; margin:22px 0; }
+.study-rating-title { font-size:1.15rem; font-weight:600; margin:18px 0 6px; }
+.study-rating-sub { font-size:14px; color:var(--text-secondary); margin-bottom:14px; }
+.study-rating-row { display:flex; gap:8px; margin-bottom:20px; }
+.study-rating-row .ts-btn { flex:1; }
+.study-lock-row { display:flex; justify-content:flex-end; }
+.study-sep { border:none; border-top:1px solid #e2e8f0; margin:1.5rem 0; }
+.ts-step-card {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 22px; margin: 28px 0 0; cursor: pointer; font-family: inherit; text-align: left;
+  transition: border-color .12s, background .12s;
+}
+.ts-step-card:hover { border-color: var(--patient-a); background: var(--patient-a-soft); }
+.ts-step-card.open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
+.ts-step-card-head { flex: 1; }
+.ts-step-title { font-size: 1.25rem; font-weight: 600; font-family: var(--font-serif, serif); margin: 0; }
+.ts-step-preview { font-size: 13.5px; color: var(--text-secondary); margin-top: 5px; }
+.ts-step-chevron { font-size: 16px; color: var(--text-muted); transition: transform .15s; flex-shrink: 0; }
+.ts-step-chevron.open { transform: rotate(180deg); }
+.ts-step-body {
+  display: none; border: 1px solid var(--border); border-top: none;
+  border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;
+  padding: 24px 22px 28px; margin-bottom: 0;
+}
+.ts-step-body.open { display: block; }
+.ts-step-sub { font-size: 14px; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.6; }
+.ts-legend { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.7; }
+.ts-legend b.up { color: var(--patient-a); }
+.ts-legend b.down { color: var(--patient-b); }
+.ts-btn {
+  font-size: 13px; padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border);
+  background: #fff; cursor: pointer; color: var(--text);
+}
+.ts-btn.active { background: var(--text-primary); border-color: var(--text-primary); color: #fff; }
+.ts-btn.active.favor { background: var(--patient-a); border-color: var(--patient-a); }
+.ts-btn.active.against { background: var(--patient-b); border-color: var(--patient-b); }
+.ts-match-panel {
+  width: 100%; display: flex; align-items: center; gap: 18px; text-align: left;
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; margin-bottom: 20px; cursor: pointer; font-family: inherit;
+  transition: border-color .12s, background .12s;
+}
+.ts-match-panel:hover { border-color: var(--patient-a); background: var(--patient-a-soft); }
+.ts-match-num {
+  flex-shrink: 0; width: 52px; height: 52px; border-radius: 12px; background: var(--patient-a-soft);
+  color: var(--patient-a); font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.ts-match-body { flex: 1; }
+.ts-match-line { font-size: 15px; font-weight: 600; }
+.ts-match-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.ts-match-chevron { font-size: 18px; color: var(--text-muted); flex-shrink: 0; }
+.ts-summary-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; margin: 32px 0;
+}
+.ts-summary-label { font-size: 12.5px; color: var(--text-muted); margin-bottom: 8px; }
+.ts-summary-text { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+.ts-summary-text b.favor { color: var(--patient-a); }
+.ts-summary-text b.against { color: var(--patient-b); }
+.ts-btn.has-ico { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.ts-lock-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin: 6px 0 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+</style>

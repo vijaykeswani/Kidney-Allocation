@@ -18,9 +18,7 @@ from decision_tree import tiebreaker
 from decision_tree.fft_model import (
     FastFrugalTree, augment, build_difference_features, feature_row, train_fft,
 )
-from decision_tree.fft_component import (
-    DEFAULT_FFT_PALETTE, PARAM_DIRECTION_LABELS, fft_svg_explained,
-)
+from decision_tree.fft_component import PARAM_DIRECTION_LABELS
 
 FEATURES = features.FEATURE_KEYS
 
@@ -133,6 +131,13 @@ def results_view():
     if error or stats is None:
         return render_template("not_ready.html", n_decisions=len(decisions))
 
+    baseline_matches = None
+    if override:        # what the model matched before the participant edited it
+        base_stats = train_fft_cached(decisions, FEATURES, None)[2]
+        if base_stats:
+            baseline_matches = sum(c["match"] for c in _tree_cases(base_stats["tree"], decisions))
+    db.log_event(username, "results_viewed", {"edited": bool(override), "n_part1": len(decisions)})
+
     version = db.get_model_version(username)
     views = db.get_tutorial_seen_count(username)
     tutorial_mode = "full" if views == 0 else ("reminder" if views == 2 else "")
@@ -162,38 +167,107 @@ def results_view():
         features_json=features.FEATURES_DATA,
         model_version=version,
         trial_count=len(db.list_trials(username, model_version=version)),
-        tutorial_mode=tutorial_mode,
+        tutorial_mode="",      # walkthrough off: the feature-list page has none, and both pages should offer the same experience
         max_new_features=MAX_NEW_FEATURES,
+        baseline_matches=baseline_matches,
+        final_mode=False, final_edited=False, final_arm="treatment", survey_url="",
     )
+
+
+def _tree_cases(tree_dict, decisions):
+    """The given tree's call on each decision: [{n, A, B, choice, pred, match}, ...]."""
+    if not decisions:
+        return []
+    F, feat_names = build_difference_features(decisions, FEATURES)
+    tree = FastFrugalTree.from_dict(tree_dict, feature_names=feat_names)
+    out = []
+    for i, (d, p) in enumerate(zip(decisions, tree.predict(F.values))):
+        pred = "A" if int(p) == 1 else "B"
+        out.append({
+            "n": i + 1,
+            "A": {k: d.get(f"A_{k}") for k in FEATURES},
+            "B": {k: d.get(f"B_{k}") for k in FEATURES},
+            "choice": d["choice"], "pred": pred, "match": pred == d["choice"],
+        })
+    return out
+
+
+def _part(rec, name):
+    return [d for d in rec.get(name, []) if d.get("choice") in ("A", "B")]
+
+
+def freeze_model(username, use_override=True):
+    """
+    Fix the participant's tree as it stands: their edits (treatment arms) or the
+    unedited Part-1 tree (control). Returns a JSON-able dict, or None if there
+    are too few answers. Never retrained afterwards.
+    """
+    rec = db.load_all_users().get(username, {})
+    decisions = _part(rec, "part1")
+    if len(decisions) < 6:
+        return None
+    override = db.get_fft_override(username) if use_override else None
+    stats = train_fft_cached(decisions, FEATURES, override)[2]
+    base = train_fft_cached(decisions, FEATURES, None)[2]
+    if not stats or not base:
+        return None
+    return {
+        "model": stats["tree"],
+        "edited": bool(stats["tree"] != base["tree"]),
+        "matches_before_edit": sum(c["match"] for c in _tree_cases(base["tree"], decisions)),
+        "matches_at_lock": sum(c["match"] for c in _tree_cases(stats["tree"], decisions)),
+        "n_part1": len(decisions),
+        "locked_at": datetime.now().isoformat(),
+    }
 
 
 def final_view():
+    """The locked-in tree, read-only, with how it did on the Part-2 hold-out."""
     username = session["username"]
-    users = db.load_all_users()
-    rec = users.get(username, {})
-    # Deliberately NOT loading the participant's saved edits: every arm ends
-    # on a freshly-trained, unedited model, so the trust questions that follow
-    # are about the same kind of artifact for everyone (control has no edits).
-    override = None
+    rec = db.load_all_users().get(username, {})
+    frozen = db.get_frozen_model(username)
+    part1, part2 = _part(rec, "part1"), _part(rec, "part2")
+    if not frozen or not part2:
+        return render_template("not_ready.html", n_decisions=len(part1) + len(part2))
 
-    all_decisions = (
-        [d for d in rec.get("part1", []) if d.get("choice") in ("A", "B")]
-        + [d for d in rec.get("part2", []) if d.get("choice") in ("A", "B")]
+    tree_dict = frozen["model"]
+    cases = _tree_cases(tree_dict, part2)
+    n_matches = sum(c["match"] for c in cases)
+    base_stats = train_fft_cached(part1, FEATURES, None)[2]
+    base_matches = sum(c["match"] for c in _tree_cases(base_stats["tree"], part2))
+
+    if "holdout" not in frozen:     # record once, for analysis
+        frozen["holdout"] = {"n": len(cases), "matches": n_matches, "matches_if_unedited": base_matches}
+        db.set_frozen_model(username, frozen)
+    db.log_event(username, "final_viewed", frozen["holdout"])
+
+    # Re-derive the node explanations for exactly this (frozen) tree, then show it on the SAME page as before,
+    # read-only, with the hold-out cases in the match panel and overlay.
+    _, _, stats, _, _ = train_fft_cached(part1, FEATURES, tree_dict)
+    return render_template(
+        "model.html",
+        final_mode=True,
+        final_edited=bool(frozen.get("edited")),
+        final_arm=frozen.get("arm", "treatment"),
+        survey_url=url_for("survey"),
+        apply_url="", reset_url="", rate_url="", continue_url="", review_url="",
+        new_scenario_url="", answer_scenario_url="", feedback_url="", tutorial_seen_url="",
+        log_url=url_for("log_event"),
+        current_score=None,
+        has_override=False,
+        tree_json=stats["tree"],
+        params_json=[f"{p}_diff" for p in FEATURES],
+        labels_json=PARAM_DIRECTION_LABELS,
+        node_explanations_json=stats.get("node_explanations") or [],
+        summary_explanation_json=stats.get("summary_explanation") or "",
+        past_scenarios_json=_scenarios_for_audit(part2),
+        feature_ranges_json=_feature_ranges(),
+        features_json=features.FEATURES_DATA,
+        model_version=0, trial_count=0,
+        tutorial_mode="",
+        max_new_features=MAX_NEW_FEATURES,
+        baseline_matches=base_matches,
     )
-    if len(all_decisions) < 6:
-        return render_template("not_ready.html", n_decisions=len(all_decisions))
-
-    fft_obj, nodes_df, stats, feat_names, error = train_fft_cached(all_decisions, FEATURES, override)
-    if error or stats is None:
-        return render_template("not_ready.html", n_decisions=len(all_decisions))
-
-    svg = fft_svg_explained(
-        tree=stats["tree"],
-        palette=DEFAULT_FFT_PALETTE,
-        node_explanations=stats.get("node_explanations"),
-        summary_explanation=stats.get("summary_explanation"),
-    )
-    return render_template("final.html", svg=svg, survey_url=url_for("survey"))
 
 
 def apply_edit_handler(username, payload):

@@ -482,7 +482,7 @@ def fft_svg(tree, palette, test_diffs=None, width=760):
 DEFAULT_FFT_PALETTE = {
     "bg": "#ffffff", "card": "#f8fafc", "border": "#e2e8f0", "text": "#0f172a",
     "dim": "#64748b", "muted": "#94a3b8", "accent": "#2563eb",
-    "a": "#b91c1c", "b": "#1d4ed8",
+    "a": "#0f766e", "b": "#b1622f",
 }
 
 

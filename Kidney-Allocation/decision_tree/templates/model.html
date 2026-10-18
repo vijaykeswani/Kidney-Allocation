@@ -1,3 +1,4 @@
+{% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,8 +21,8 @@
   /* Interactive accent (buttons, links, edit mode) — deliberately a
      different hue from both patient colors, so "editable"/"clickable"
      never gets confused with "this is Patient B". */
-  --accent: #4338ca;          --accent-hover: #3730a3;
-  --accent-soft: #eef2ff;     --accent-border: #c7d2fe;
+  --accent: #2563eb;          --accent-hover: #1d4ed8;
+  --accent-soft: #eff6ff;     --accent-border: #bfdbfe;
 
   /* Destructive actions — separate from Patient A's red, so "delete"
      and "this is Patient A" are never the same color. */
@@ -687,55 +688,66 @@ body { padding: 0; }
   .page-wrap { padding: 24px 18px 44px; }
   .audit-scenario-grid, .audit-form-grid { grid-template-columns: 1fr; }
 }
+
+/* ── parity with the feature-list pages: always-visible match panel, lock-in note, (i) icons ── */
+.match-panel { width: 100%; display: flex; align-items: center; gap: 18px; text-align: left; background: #fff;
+  border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin: 0 0 20px; cursor: pointer;
+  font-family: inherit; transition: border-color .12s, background .12s; }
+.match-panel:hover:not(:disabled) { border-color: var(--patient-a); background: var(--patient-a-soft); }
+.match-panel:disabled { opacity: .55; cursor: default; }
+.match-panel-num { flex-shrink: 0; width: 52px; height: 52px; border-radius: 12px; background: var(--patient-a-soft);
+  color: var(--patient-a); font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.match-panel-body { flex: 1; }
+.match-panel-line { font-size: 15px; font-weight: 600; }
+.match-panel-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.match-panel-chev { font-size: 18px; color: var(--text-muted); flex-shrink: 0; }
+.lock-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin: 10px 0 0; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.info { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid var(--border-strong); background: #fff; color: var(--text-muted); font-size: 11px; font-weight: 700;
+  font-style: normal; font-family: Georgia, serif; line-height: 1; cursor: help; margin-left: 6px; position: relative;
+  vertical-align: middle; text-transform: none; letter-spacing: 0; }
+.info:hover, .info:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+.info::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  width: max-content; max-width: 260px; background: #0f172a; color: #fff; font-size: 12.5px; font-weight: 400; line-height: 1.45;
+  padding: 8px 10px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 300;
+  white-space: normal; text-align: left; }
+.info:hover::after, .info:focus::after { opacity: 1; }
+.why { margin: 12px 0 4px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.why-head { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.why-steps { margin: 0 0 6px; padding-left: 20px; font-size: 13.5px; line-height: 1.55; }
+.why-steps li.skipped { color: var(--text-muted); }
+.why-steps li.applies { color: var(--text); font-weight: 500; }
+.why-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; }
+</style>
+{% include "_study_ui_css.html" %}
+<style>
+/* same page frame as the feature-list page */
+body { background: #fff; }
+.page-wrap { max-width: 900px; padding: 36px 40px 48px; }
 </style>
 </head>
 <body>
 
 <div class="page-wrap">
-  <div class="header-row">
-    <div>
-      <h2>Your preference model</h2>
-    </div>
-  </div>
-  <p id="mode-caption"></p>
+  {% if not final_mode %}{{ page_header() }}{% endif %}
+{{ match_panel() }}
+  {% include "_case_overlay.html" %}
+  {% include "_study_flow.html" %}
 
-  <div id="editing-banner" class="editing-banner">
-    <div class="legend-row">
-      <span class="legend-item"><span class="legend-badge accent">✎</span> Click to edit this rule</span>
-      <span class="legend-item"><span class="legend-badge dark">▲▼</span> Move this rule up or down</span>
-      <span class="legend-item"><span class="legend-dash"></span> Dashed outline = you can click this</span>
-    </div>
+  <!-- Retained only because a few code paths (and the dormant walkthrough) still look these up; the walkthrough is off. -->
+  <div hidden>
+    <div id="edit-hint"></div>
+    <div class="tutorial-nudge" id="tutorial-nudge"><span id="tutorial-nudge-text"></span><button type="button" id="tutorial-nudge-open"></button></div>
+    <button type="button" id="btn-help"></button>
   </div>
 
-  <div id="edit-hint" style="display:none"></div>
-
-  <div class="tutorial-nudge" id="tutorial-nudge">
-    <span id="tutorial-nudge-text">
-      Reminder: you can edit any check in this tree, and test it against a new scenario below.
-    </span>
-    <button class="btn-link" id="tutorial-nudge-open" type="button">Show me how</button>
-  </div>
-
-  <!-- Editing controls live at the top of the tree interface. Hidden until the
-       participant has rated the model, which is the same gate as before. -->
-  <div class="edit-bar" id="edit-bar" style="display:none">
-    <div class="edit-bar-left">
-      <button id="mode-toggle" class="btn-mode">✎ Edit the model</button>
-      {% if has_override %}
-      <button id="reset-model" class="btn-reset" type="button">↺ Reset to original model</button>
-      {% endif %}
-    </div>
-    <div class="edit-bar-right">
-      <button class="btn-help" id="btn-help" type="button" title="Show the walkthrough">
-        <span class="btn-help-icon">?</span> How this works
-      </button>
-    </div>
-  </div>
-
+  {% call step(1, "Step 1. The checks the AI applies, in order") %}
+  <div class="ts-step-sub">The AI goes through these checks from top to bottom, and the first one that applies decides the case. {% if not final_mode %}Click any check to change it, or add a new one.{% endif %}</div>
+  {% if not final_mode %}<div class="ts-legend">✎ click a check to edit it &nbsp;·&nbsp; ▲▼ move it up or down &nbsp;·&nbsp; dashed outline = you can click it</div>{% endif %}
   <div class="tree-card">
     <div id="toolbar">
       <button class="btn-add"   id="btn-add">＋ Add decision step</button>
-      <button class="btn-apply" id="btn-apply">✓ Done editing</button>
       <span class="limit-note ok" id="limit-note"></span>
     </div>
 
@@ -857,60 +869,16 @@ body { padding: 0; }
 
     </div><!-- /#svg-scroll -->
   </div><!-- /.tree-card -->
+  {% endcall %}
 
-  <div class="rating-card" id="rating-card">
-    <div class="rating-title">How well does this match your thinking?</div>
-    <div class="rating-sub">1 = not at all &nbsp;&nbsp;·&nbsp;&nbsp; 7 = perfectly</div>
-    <div class="score-row-7" id="score-row-7"></div>
-  </div>
-
-  <div class="post-rating-row" id="post-rating-row" style="display:none">
-    <div class="post-rating-left">
-      <button id="open-test-modal" class="btn-test-model" type="button">🔍 Test this model</button>
-      <span class="match-count" id="match-count"></span>
-    </div>
-    <button class="btn-continue" id="btn-continue">Continue to Part 2 →</button>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="test-modal-backdrop" style="display:none">
-  <div class="modal-dialog">
-    <div class="modal-header">
-      <button id="modal-back" class="modal-back" type="button" style="display:none">← Back</button>
-      <div class="modal-title" id="modal-title">Test this model</div>
-      <button id="modal-close" class="modal-close" type="button">✕</button>
-    </div>
-
-    <div class="modal-body" id="modal-body">
-      <div id="view-picker" class="modal-view">
-        <button class="option-card" id="opt-past-answers" type="button">
-          <div class="option-icon">📋</div>
-          <div class="option-text">
-            <div class="option-title">Check your past answers</div>
-            <div class="option-sub" id="opt-past-sub">See where the model agrees or disagrees with your answers.</div>
-          </div>
-        </button>
-        <button class="option-card" id="opt-new-scenario" type="button">
-          <div class="option-icon">🧪</div>
-          <div class="option-text">
-            <div class="option-title">Check a new scenario</div>
-            <div class="option-sub">Build a pair yourself, or start from random values, and see what the model would choose.</div>
-          </div>
-        </button>
-      </div>
-
-      <div id="view-new-scenario" class="modal-view" style="display:none">
-        <button id="audit-randomize" class="btn-try-new" type="button">🎲 Fill with random values</button>
-        <div id="audit-detail-custom"></div>
-      </div>
-
-      <div id="view-past-answers" class="modal-view" style="display:none">
-        <div class="audit-summary-line" id="audit-summary-line"></div>
-        <div class="audit-grid" id="audit-grid"></div>
-        <div class="audit-detail" id="audit-detail-past"></div>
-      </div>
-    </div>
-  </div>
+  {{ summary_card() }}
+  {% if not final_mode %}
+  {{ actions(has_override) }}
+  {{ rating() }}
+  {{ lock_in() }}
+  {% else %}
+  {{ final_continue(survey_url) }}
+  {% endif %}
 </div>
 
 <!-- ── Tutorial (spotlight walkthrough) ─────────────────────────── -->
@@ -1031,6 +999,10 @@ var NEW_SCENARIO_URL = {{ new_scenario_url | tojson }};
 var ANSWER_SCENARIO_URL = {{ answer_scenario_url | tojson }};
 var FEEDBACK_URL = {{ feedback_url | tojson }};
 var LOG_URL = {{ log_url | tojson }};
+var BASELINE_MATCHES = {{ baseline_matches | tojson }};
+var FINAL_MODE = {{ final_mode | tojson }};
+var FINAL_EDITED = {{ final_edited | tojson }};
+var FINAL_ARM = {{ final_arm | tojson }};
 var TUTORIAL_SEEN_URL = {{ tutorial_seen_url | tojson }};
 var currentScore = {{ current_score | tojson }};
 var pastScenarios = {{ past_scenarios_json | tojson }};
@@ -1262,11 +1234,10 @@ function render() {
   applyZoom();
   updateLimitNote();
 
-  // Clicks are attached in both modes: in view mode only the tree itself is
-  // interactive, but the handlers are harmless and keep one code path.
   reAttachNodeClicks();
 
   updateHeight();
+  onTreeChanged();
 }
 
 // Re-render without losing an open panel's scroll position.
@@ -1275,6 +1246,7 @@ function redraw() {
   applyZoom();
   reAttachNodeClicks();
   updateHeight();
+  onTreeChanged();
 }
 
 // ── Feature-addition limit ────────────────────────────────────────
@@ -2167,158 +2139,69 @@ document.getElementById('btn-add').addEventListener('click', function() {
   render();
 });
 
-document.getElementById('btn-apply').addEventListener('click', function() {
-  savePanel();
-  saveLeafPanel();
-  saveRefinePanel();
-  saveDefaultPanel();
+// ── Same page flow as the feature-list page ──────────────────────────────────
+// The tree is editable while you look at it (no separate "edit mode"). The rating / apply / reset / lock-in controls
+// (templates/_study_flow.html) and the "See how your model performs" overlay (templates/_case_overlay.html) are the
+// SAME code the feature-list page uses; only the model differs.
+editing = !FINAL_MODE;              // read-only on the final page, exactly like the feature-list page
+var INITIAL_TREE_JSON = null;      // snapshot once loaded, to know whether there are unsaved edits
 
-  var btn = document.getElementById('btn-apply');
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
+function commitOpenPanels() { savePanel(); saveLeafPanel(); saveRefinePanel(); saveDefaultPanel(); }
+function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
 
-  fetch(APPLY_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({tree: tree, baseline_node_count: baselineNodeCount})
-  })
-  .then(function(resp) {
-    if (!resp.ok) {
-      return resp.json().catch(function () { return {}; }).then(function (body) {
-        throw new Error(body.error || 'Save failed');
-      });
-    }
-    return resp.json();
-  })
-  .then(function(data) {
-    btn.textContent = '✓ Changes applied';
-    btn.classList.add('saved');
-    if (data && data.redirect) {
-      setTimeout(function(){ window.location.href = data.redirect; }, 600);
-    } else {
-      btn.disabled = false;
-      setTimeout(function(){ btn.textContent="\u2713 Done editing"; btn.classList.remove('saved'); }, 3000);
-    }
-  })
-  .catch(function(err) {
-    btn.disabled = false;
-    btn.textContent = (err && err.message) ? err.message : "Couldn't save \u2014 try again";
-    setTimeout(function () { btn.textContent = '\u2713 Done editing'; }, 4000);
-  });
-});
-
-// ── Mode toggle (view <-> edit), no page navigation ─────────────────
-var MODE_CAPTIONS = {
-  view: "Based on your decisions, here's the decision tree that captures your thinking. Each step is a single check the tree applies, in order.",
-  edit: "You're editing the model \u2014 click any check, outcome, or the \u201COTHERWISE\u201D box to change it. Use \u201C+ Add decision step\u201D to add a new check."
-};
-
-// Editing stays gated behind the alignment rating, exactly as before — only
-// the controls' position changed, not when they become available.
-function showPostRatingActions() {
-  document.getElementById('rating-card').style.display = 'none';
-  document.getElementById('post-rating-row').style.display = 'flex';
-  var bar = document.getElementById('edit-bar');
-  if (bar) bar.style.display = 'flex';
-  updateMatchCount();
-}
-
-function updateMatchCount() {
-  var el = document.getElementById('match-count');
-  if (!el) return;
+function updateMatchCount() {      // the shared match panel: same ids and wording as the feature-list page
   var summary = auditMatchSummary();
-  el.textContent = summary.total ? ('Matches ' + summary.matches + ' of your ' + summary.total + ' answers') : '';
+  document.getElementById('ts-match-num').textContent = summary.total ? summary.matches : '\u2013';
+  document.getElementById('ts-match-line').textContent = summary.total
+    ? ('The model matches your choices in ' + summary.matches + ' of ' + summary.total + ' cases.') : '';
+  document.getElementById('ts-match-sub').textContent = (BASELINE_MATCHES !== null && BASELINE_MATCHES !== summary.matches)
+    ? ("You've edited the model. It started at " + BASELINE_MATCHES + ' of ' + summary.total + '. Tap to see case details.')
+    : 'Tap to see which cases match \u2014 or try your own.';
+  if (FINAL_MODE) StudyFlow.finalHeader({n: summary.total, current: summary.matches, baseline: BASELINE_MATCHES, edited: FINAL_EDITED, arm: FINAL_ARM});
 }
-
-function setMode(nextEditing) {
-  editing = nextEditing;
-  var caption = document.getElementById('mode-caption');
-  var banner = document.getElementById('editing-banner');
-  var postRow = document.getElementById('post-rating-row');
-  var modeBtn = document.getElementById('mode-toggle');
-  if (editing) {
-    caption.textContent = MODE_CAPTIONS.edit;
-    banner.style.display = 'flex';
-    postRow.style.display = 'none';
-    // Entering edit mode starts a fresh allowance of new checks.
-    baselineNodeCount = ((tree && tree.nodes) || []).length;
-    if (modeBtn) { modeBtn.textContent = '✎ Editing…'; modeBtn.disabled = true; }
-  } else {
-    caption.textContent = MODE_CAPTIONS.view;
-    banner.style.display = 'none';
-    if (modeBtn) { modeBtn.textContent = '✎ Edit the model'; modeBtn.disabled = false; }
-    if (currentScore) { showPostRatingActions(); } else { postRow.style.display = 'none'; }
-  }
-  setAuditEnabled(!editing);
-  selectedNode = null; leafPanelNode = null; refinePanelNode = null;
-  document.getElementById('edit-panel').style.display    = 'none';
-  document.getElementById('default-panel').style.display = 'none';
-  document.getElementById('leaf-panel').classList.remove('visible');
-  document.getElementById('refine-panel').classList.remove('visible');
-  render();
-}
-
-// The only way into edit mode is this button (shown after rating); the only
-// way out is "done editing" in the toolbar, which saves and reloads.
-document.getElementById('mode-toggle').addEventListener('click', function() {
-  if (!_firstEditLogged) {
-    _firstEditLogged = true;
-    logEvent('first_edit_started', {view_ms: Date.now() - PAGE_LOAD_TIME});
-  }
-  setMode(true);
-  if (!_editTutorialShown) {
-    _editTutorialShown = true;
-    openTutorial('edit_mode_enter', 'edit');
-  }
-});
-
-var resetBtn = document.getElementById('reset-model');
-if (resetBtn) {
-  resetBtn.addEventListener('click', function() {
-    if (!confirm("Reset to the original model trained from your answers? This discards your edits.")) return;
-    resetBtn.disabled = true;
-    resetBtn.textContent = 'Resetting…';
-    fetch(RESET_URL, { method: 'POST' })
-      .then(function(resp) { return resp.json(); })
-      .then(function(data) {
-        if (data && data.redirect) window.location.href = data.redirect;
-      })
-      .catch(function() {
-        resetBtn.disabled = false;
-        resetBtn.textContent = '\u21BA Reset to original model';
-      });
+function treePlainWords() {
+  var nodes = (tree && tree.nodes) || [], dflt = (tree && tree.default_class === 1) ? 'A' : 'B';
+  var out = nodes.map(function(nd, i) {
+    var e = nodeExplanations[i] || {};
+    var s = (e.explanation || '') + ' If so: ' + lowerFirst(outcomeLabel(nd, false)) + '.';
+    if (e.refine_explanation) s += ' ' + e.refine_explanation;
+    return s;
   });
+  out.push(nodes.length ? 'If none of these checks applies, the model falls back to Patient ' + dflt + '.'
+                        : 'There are no checks yet, so the model just picks Patient ' + dflt + '.');
+  return out.join(' ');
+}
+function onTreeChanged() {          // runs after every redraw, so everything stays in step with the edits
+  updateMatchCount();
+  document.getElementById('ts-summary-text').textContent = treePlainWords();
+  var n = ((tree && tree.nodes) || []).length;
+  document.getElementById('ts-step1-preview').textContent = n + (n === 1 ? ' check' : ' checks') + ', applied in order \u2014 the first one that applies decides.';
 }
 
-// ── 7-point alignment rating (gates the edit/continue options) ──────
-function renderScoreRow() {
-  var row = document.getElementById('score-row-7');
-  row.innerHTML = '';
-  for (var i = 1; i <= 7; i++) {
-    (function(score) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'score-btn-7' + (currentScore === score ? ' selected' : '');
-      btn.textContent = String(score);
-      btn.addEventListener('click', function() {
-        currentScore = score;
-        renderScoreRow();
-        showPostRatingActions();
-        fetch(RATE_URL, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({score: score})
-        }).catch(function() {});
-      });
-      row.appendChild(btn);
-    })(i);
-  }
-}
-renderScoreRow();
-if (currentScore) showPostRatingActions();
+window.CaseAdapter = {
+  features: FEATURES_DATA,
+  ranges: FEATURE_RANGES,
+  valuesOf: function(key) { var f = FEATURE_BY_KEY[key]; return (f && f.values && f.values.length) ? f.values.slice().sort(function(a, b) { return a - b; }) : null; },
+  past: function() { return pastScenarios; },
+  predict: function(a, b) {
+    var r = evalTreeRow(diffsFromAB(a, b));
+    return {choice: r.cls === 1 ? 'A' : 'B', how: r.exitIndex >= 0 ? 'decided at step ' + (r.exitIndex + 1) : 'default choice'};
+  },
+  inUse: function(key) { return ((tree && tree.nodes) || []).some(function(n) { return n.feature === key + '_diff' || (n.refine && n.refine.feature === key + '_diff'); }); },
+  explain: function(a, b, userChoice) { return explainTreeHTML(explainTreeCase(a, b, userChoice, FINAL_MODE)); },
+  infoIcon: infoIcon,
+  logEvent: logEvent
+};
+document.getElementById('ts-match-panel').addEventListener('click', function() { CaseOverlay.open(); });
 
-document.getElementById('btn-continue').addEventListener('click', function() {
-  window.location.href = CONTINUE_URL;
+// The tree measures itself, so it must be visible: draw it when the step is opened.
+StudyFlow.steps(function() { zoom = 1; render(); fitZoom(true); });   // reset first: a fit measured while hidden would otherwise stick
+if (!FINAL_MODE) StudyFlow.init({
+  applyUrl: APPLY_URL, resetUrl: RESET_URL, rateUrl: RATE_URL, continueUrl: CONTINUE_URL, currentScore: currentScore,
+  beforeApply: commitOpenPanels,
+  getPayload: function() { return {tree: tree, baseline_node_count: baselineNodeCount}; },
+  isDirty: function() { commitOpenPanels(); return JSON.stringify(tree) !== INITIAL_TREE_JSON; },
+  logEvent: logEvent
 });
 
 // ── Scenario audit panel ─────────────────────────────────────────
@@ -2368,17 +2251,79 @@ function evalTreeRow(diffs) {
   return {cls: (tree && tree.default_class) || 0, exitIndex: -1, refineFired: null};
 }
 
-function auditWhyText(result) {
-  if (result.exitIndex === -1) return 'No step matched \u2014 used the default choice.';
-  var stepNum = result.exitIndex + 1;
-  if (result.refineFired !== null) {
-    return 'Decided at step ' + stepNum + '\u2019s follow-up check \u2014 the main condition was a close call.';
-  }
-  return 'Decided at step ' + stepNum + '.';
+// ── Per-case explanation: why the tree picked the patient it did ─────────────
+// Twin of decision_tree/explain.py (used by the static final page). Keep the wording identical;
+// test_explanations.py compares the two.
+function _rnd(x) { return Math.floor(Math.abs(Number(x)) + 0.5); }
+function _treeGap(base) { return FEATURE_GAP[base + '_diff'] || [base.replace(/_/g, ' ') + ' gap', '']; }
+function _outcomeLower(node) { var s = outcomeLabel(node, false); return s.charAt(0).toLowerCase() + s.slice(1); }
+function _treeFires(node, x) {
+  var thr = Number(node.threshold) || 0;
+  if (node.use_abs) return Math.abs(x) >= thr;
+  return (node.op || '>=') === '>=' ? x >= thr : x <= thr;
 }
-
-function renderAuditGrid() {
-  renderPastAnswersView();
+function explainTreeCase(a, b, userChoice, isFinal) {
+  var nodes = (tree && tree.nodes) || [], steps = [], exitIndex = -1, cls = null;
+  for (var i = 0; i < nodes.length; i++) {
+    var nd = nodes[i], base = (nd.feature || '').replace('_diff', '');
+    var meta = _treeGap(base), gap = meta[0], unit = meta[1];
+    var x = Number(a[base]) - Number(b[base]), ax = _rnd(x), thr = _rnd(nd.threshold || 0), n = i + 1;
+    var refine = nd.refine;
+    if (!_treeFires(nd, x)) {
+      steps.push({n: n, applies: false, text: refine
+        ? 'Step ' + n + ': the ' + gap + ' is ' + ax + _unitStr(ax, unit) + ', more than the ' + thr + _unitStr(thr, unit) + ' that counts as a tie, so this step doesn\'t apply.'
+        : 'Step ' + n + ': the ' + gap + ' is ' + ax + _unitStr(ax, unit) + '; this step needs ' + _thrWithUnit(thr, unit, nd.op || '>=') + ', so it doesn\'t apply.'});
+      continue;
+    }
+    exitIndex = i;
+    if (refine) {
+      var rb = (refine.feature || '').replace('_diff', ''), rm = _treeGap(rb), rgap = rm[0], runit = rm[1];
+      var rx = Number(a[rb]) - Number(b[rb]), rax = _rnd(rx), rthr = _rnd(refine.threshold || 0), rcond;
+      if (refine.use_abs) {
+        rcond = Math.abs(rx) >= (Number(refine.threshold) || 0);
+        cls = rcond ? (((rx > 0) === refine.prefer_higher) ? 1 : 0) : refine.false_class;
+      } else {
+        rcond = (refine.op || '>=') === '>=' ? rx >= (Number(refine.threshold) || 0) : rx <= (Number(refine.threshold) || 0);
+        cls = rcond ? refine.true_class : refine.false_class;
+      }
+      var W1 = cls === 1 ? 'A' : 'B';
+      steps.push({n: n, applies: true, text: 'Step ' + n + ': the ' + gap + ' is ' + ax + _unitStr(ax, unit) + ', within the ' + thr + _unitStr(thr, unit) + ' that counts as a tie on ' + base.replace(/_/g, ' ') + ', so a follow-up check decides.'});
+      var need = _thrWithUnit(rthr, runit, refine.op || '>=');
+      steps.push({n: n, applies: true, text: rcond
+        ? 'Follow-up: the ' + rgap + ' is ' + rax + _unitStr(rax, runit) + '; it needs ' + need + ', so it applies. Rule: ' + _outcomeLower(refine) + ' \u2192 Patient ' + W1 + '.'
+        : 'Follow-up: the ' + rgap + ' is ' + rax + _unitStr(rax, runit) + '; it needs ' + need + ', so it doesn\'t apply, and the follow-up falls back to Patient ' + W1 + '.'});
+    } else {
+      cls = ((x > 0) === nd.prefer_higher) ? 1 : 0;
+      var W2 = cls === 1 ? 'A' : 'B';
+      steps.push({n: n, applies: true, text: 'Step ' + n + ': the ' + gap + ' is ' + ax + _unitStr(ax, unit) + ' (Patient A ' + _rnd(a[base]) + ', Patient B ' + _rnd(b[base]) + '); this step needs '
+        + _thrWithUnit(thr, unit, nd.op || '>=') + ', so it applies. Rule: ' + _outcomeLower(nd) + ' \u2192 Patient ' + W2 + '.'});
+    }
+    break;
+  }
+  if (exitIndex === -1) cls = (tree && tree.default_class) || 0;
+  var W = cls === 1 ? 'A' : 'B';
+  var headline = exitIndex >= 0 ? 'The model picks Patient ' + W + '. It decided at step ' + (exitIndex + 1) + '.'
+                                : 'The model picks Patient ' + W + '. No step applied, so this is its default choice.';
+  var note = null;
+  if (userChoice && userChoice !== W) {
+    if (exitIndex >= 0) {
+      var later = nodes.length - exitIndex - 1;
+      note = later > 0 ? 'You chose Patient ' + userChoice + '. The tree stops at the first step that applies, so it never looked at the later steps.'
+                       : 'You chose Patient ' + userChoice + '. The tree stops at the first step that applies.';
+      if (!isFinal) note += ' If a different factor should come first, you can reorder or edit the steps.';
+    } else {
+      note = 'You chose Patient ' + userChoice + '. No rule applied to these two patients, so the model fell back to its default choice.';
+      if (!isFinal) note += ' Adding a step for a factor that mattered to you here would change this.';
+    }
+  }
+  return {winner: W, exit_index: exitIndex, headline: headline, steps: steps, note: note};
+}
+function explainTreeHTML(ex) {
+  var html = '<div class="why"><div class="why-head">' + esc(ex.headline) + '</div><ol class="why-steps">';
+  ex.steps.forEach(function(s) { html += '<li class="' + (s.applies ? 'applies' : 'skipped') + '">' + esc(s.text) + '</li>'; });
+  html += '</ol>';
+  if (ex.note) html += '<div class="why-note">' + esc(ex.note) + '</div>';
+  return html + '</div>';
 }
 
 function auditMatchSummary() {
@@ -2391,213 +2336,12 @@ function auditMatchSummary() {
   return {matches: n, total: pastScenarios.length};
 }
 
-function patientCardHTML(side, vals) {
-  var label = side === 'a' ? 'Patient A' : 'Patient B';
-  var html = '<div class="audit-patient-card ' + side + '">'
-           + '<div class="audit-patient-label ' + side + '">' + label + '</div>';
-  getFeatureBase().forEach(function(f) {
-    html += '<div class="audit-feature-row">'
-          + '<div class="audit-feature-name">' + esc(pretty(f)) + '</div>'
-          + '<div class="audit-feature-value">' + esc(vals[f]) + '</div>'
-          + '</div>';
-  });
-  html += '</div>';
-  return html;
+// (i) icon with the factor's definition and scale (same text as the intro screen)
+function infoIcon(f) {
+  var d = (FEATURE_BY_KEY[f] || {}).description;
+  return d ? '<span class="info" tabindex="0" role="note" data-tip="' + esc(d).replace(/"/g, '&quot;') + '">i</span>' : '';
 }
 
-// ── "Check your past answers" view ──────────────────────────────
-function renderPastAnswersView() {
-  var summary = auditMatchSummary();
-  var summaryEl = document.getElementById('audit-summary-line');
-  summaryEl.textContent = summary.total
-    ? ('Matches ' + summary.matches + ' of your ' + summary.total + ' answers')
-    : 'Answer a few scenarios first to see this.';
-
-  var grid = document.getElementById('audit-grid');
-  grid.style.gridTemplateColumns = 'repeat(' + Math.max(1, pastScenarios.length) + ', minmax(0, 1fr))';
-  grid.innerHTML = '';
-  pastScenarios.forEach(function(sc, idx) {
-    var result = evalTreeRow(diffsFromAB(sc.A, sc.B));
-    var modelChoice = result.cls === 1 ? 'A' : 'B';
-    var isMatch = modelChoice === sc.choice;
-    var chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'audit-chip ' + (isMatch ? 'match' : 'mismatch') + (auditSelected === idx ? ' selected' : '');
-    chip.textContent = idx + 1;
-    chip.title = 'Scenario ' + (idx + 1) + ' \u2014 ' + (isMatch ? 'model agrees' : 'model disagrees');
-    chip.addEventListener('click', function() {
-      auditSelected = idx;
-      renderPastAnswersView();
-    });
-    grid.appendChild(chip);
-  });
-
-  renderPastAnswerDetail();
-}
-
-function renderPastAnswerDetail() {
-  var detail = document.getElementById('audit-detail-past');
-  if (auditSelected === null || !pastScenarios.length) {
-    detail.innerHTML = '<div style="font-size: var(--fs-sm);color:var(--text-faint);text-align:center;padding:8px">Click a scenario above to see the details.</div>';
-    return;
-  }
-  var sc = pastScenarios[auditSelected];
-  var result = evalTreeRow(diffsFromAB(sc.A, sc.B));
-  var modelChoice = result.cls === 1 ? 'A' : 'B';
-  var isMatch = modelChoice === sc.choice;
-
-  var html = '<div class="audit-detail-title">Scenario ' + (auditSelected + 1) + '</div>';
-  html += '<div class="audit-scenario-grid">'
-        + patientCardHTML('a', sc.A) + patientCardHTML('b', sc.B)
-        + '</div>';
-  html += '<div class="audit-outcome-row"><span class="lbl">You chose</span><span class="val">Patient ' + esc(sc.choice) + '</span></div>';
-  html += '<div class="audit-outcome-row"><span class="lbl">Model predicts</span><span class="val">Patient ' + modelChoice + '</span></div>';
-  html += '<div class="audit-banner ' + (isMatch ? 'match' : 'mismatch') + '">'
-        + (isMatch ? 'Model agrees with your choice' : 'Model disagrees with your choice') + '</div>';
-  html += '<div class="audit-why">' + esc(auditWhyText(result)) + '</div>';
-  detail.innerHTML = html;
-}
-
-// ── "Check a new scenario" view — prefilled with random values, editable ──
-function randomFeatureValues() {
-  var vals = {};
-  getFeatureBase().forEach(function(f) {
-    var r = FEATURE_RANGES[f];
-    var allowed = (FEATURE_BY_KEY[f] || {}).values;
-    if (allowed && allowed.length) {
-      vals[f] = String(allowed[Math.floor(Math.random() * allowed.length)]);
-    } else if (r && typeof r.min === 'number' && typeof r.max === 'number') {
-      vals[f] = String(Math.round(r.min + Math.random() * (r.max - r.min)));
-    } else {
-      vals[f] = '';
-    }
-  });
-  return vals;
-}
-
-// Features with a fixed value set get a dropdown of exactly those values (a free number
-// box would let people enter patients the study can never show).
-function auditInputFor(side, f, val) {
-  var allowed = (FEATURE_BY_KEY[f] || {}).values, id = 'audit-in-' + side + '-' + f;
-  if (allowed && allowed.length) {
-    return '<select id="' + id + '"><option value="">\u2014</option>' + allowed.map(function(v) {
-      return '<option value="' + v + '"' + (String(val) === String(v) ? ' selected' : '') + '>' + v + '</option>';
-    }).join('') + '</select>';
-  }
-  return '<input type="number" id="' + id + '" value="' + esc(val) + '">';
-}
-
-function emptyFeatureValues() {
-  var vals = {};
-  getFeatureBase().forEach(function(f) { vals[f] = ''; });
-  return vals;
-}
-
-function renderNewScenarioView(useRandom) {
-  var container = document.getElementById('audit-detail-custom');
-  var valsA = useRandom ? randomFeatureValues() : emptyFeatureValues();
-  var valsB = useRandom ? randomFeatureValues() : emptyFeatureValues();
-
-  var html = '<div class="audit-form-grid">';
-  ['a', 'b'].forEach(function(side) {
-    var vals = side === 'a' ? valsA : valsB;
-    html += '<div><div class="audit-form-col-title ' + side + '">Patient ' + side.toUpperCase() + '</div>';
-    getFeatureBase().forEach(function(f) {
-      html += '<div class="audit-field"><label>' + esc(pretty(f)) + '</label>'
-            + auditInputFor(side, f, vals[f]) + '</div>';
-    });
-    html += '</div>';
-  });
-  html += '</div>';
-  html += '<div class="audit-field-error" id="audit-form-error">Fill in every field first.</div>';
-  html += '<button class="btn-see-prediction" id="audit-see-pred" type="button">See prediction</button>';
-  html += '<div id="audit-custom-result"></div>';
-  container.innerHTML = html;
-
-  document.getElementById('audit-see-pred').addEventListener('click', function() {
-    var a = {}, b = {}, missing = false;
-    getFeatureBase().forEach(function(f) {
-      var av = document.getElementById('audit-in-a-' + f).value;
-      var bv = document.getElementById('audit-in-b-' + f).value;
-      if (av === '' || bv === '') missing = true;
-      a[f] = av; b[f] = bv;
-    });
-    var errEl = document.getElementById('audit-form-error');
-    if (missing) { errEl.style.display = 'block'; return; }
-    errEl.style.display = 'none';
-
-    var result = evalTreeRow(diffsFromAB(a, b));
-    var modelChoice = result.cls === 1 ? 'A' : 'B';
-    document.getElementById('audit-custom-result').innerHTML =
-      '<div class="audit-outcome-row" style="margin-top:10px"><span class="lbl">Model predicts</span><span class="val">Patient ' + modelChoice + '</span></div>'
-      + '<div class="audit-why">' + esc(auditWhyText(result)) + '</div>';
-    logEvent('sandbox_prediction_checked', {});
-  });
-}
-
-document.getElementById('audit-randomize').addEventListener('click', function() {
-  renderNewScenarioView(true);
-});
-
-// ── Modal shell: picker <-> new-scenario / past-answers, back/close ──
-function showModalView(viewId, title, showBack) {
-  ['view-picker', 'view-new-scenario', 'view-past-answers'].forEach(function(id) {
-    document.getElementById(id).style.display = (id === viewId) ? '' : 'none';
-  });
-  document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-back').style.display = showBack ? '' : 'none';
-}
-
-function openTestModal() {
-  document.getElementById('test-modal-backdrop').style.display = 'flex';
-  var summary = auditMatchSummary();
-  var subEl = document.getElementById('opt-past-sub');
-  subEl.textContent = summary.total
-    ? ('Matches ' + summary.matches + ' of your ' + summary.total + ' answers.')
-    : 'See where the model agrees or disagrees with your answers.';
-  showModalView('view-picker', 'Test this model', false);
-  logEvent('test_model_opened', {});
-}
-
-function closeTestModal() {
-  document.getElementById('test-modal-backdrop').style.display = 'none';
-}
-
-var openTestModalBtn = document.getElementById('open-test-modal');
-if (openTestModalBtn) openTestModalBtn.addEventListener('click', openTestModal);
-document.getElementById('modal-close').addEventListener('click', closeTestModal);
-document.getElementById('modal-back').addEventListener('click', function() {
-  showModalView('view-picker', 'Test this model', false);
-});
-document.getElementById('test-modal-backdrop').addEventListener('click', function(e) {
-  if (e.target === this) closeTestModal();
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && document.getElementById('test-modal-backdrop').style.display !== 'none') {
-    closeTestModal();
-  }
-});
-document.getElementById('opt-new-scenario').addEventListener('click', function() {
-  showModalView('view-new-scenario', 'Check a new scenario', true);
-  renderNewScenarioView();
-  logEvent('test_model_view', {view: 'new_scenario'});
-});
-document.getElementById('opt-past-answers').addEventListener('click', function() {
-  showModalView('view-past-answers', 'Check your past answers', true);
-  renderPastAnswersView();
-  logEvent('test_model_view', {view: 'past_answers'});
-});
-
-// The trigger button lives inside .post-rating-row, which is already hidden
-// while editing — so there's nothing extra to disable here. Just make sure
-// the modal isn't left open if editing somehow starts while it's open.
-function setAuditEnabled(enabled) {
-  if (!enabled) closeTestModal();
-}
-
-function renderAudit() {
-  // Views render on demand when opened from the picker; nothing to do eagerly.
-}
 
 // ── Tracking ──────────────────────────────────────────────────────
 // Reaction time: first user interaction after the results page loads.
@@ -2891,8 +2635,8 @@ function initEditor(initTree, initParams, initLabels, initNodeExplanations, init
     updateSVG();
   });
 
-  renderAudit();
-  setMode(false);
+  render();
+  INITIAL_TREE_JSON = JSON.stringify(tree);
   fitZoom(true);
   startTutorial();
 
@@ -2900,8 +2644,8 @@ function initEditor(initTree, initParams, initLabels, initNodeExplanations, init
   // modal straight into the new-scenario view, so the link lands where it
   // promised.
   if (/[?&]try=1\b/.test(window.location.search)) {
-    openTestModal();
-    document.getElementById('opt-new-scenario').click();
+    CaseOverlay.open();
+    document.getElementById('co-own-toggle').click();
   }
 }
 
@@ -2912,6 +2656,7 @@ initEditor(
   {{ node_explanations_json | tojson }},
   {{ summary_explanation_json | tojson }}
 );
+if (FINAL_MODE) StudyFlow.toggleStep(1, function() { zoom = 1; render(); fitZoom(true); });   // the final page opens with the model showing
 </script>
 </body>
 </html>

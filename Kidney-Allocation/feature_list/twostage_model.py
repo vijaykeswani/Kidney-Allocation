@@ -28,7 +28,7 @@ import numpy as np
 import features
 
 # Strength buckets 0 (off) .. 3 (a lot) -> score multiplier.
-AMP = [0.0, 1.0, 2.0, 3.2]
+AMP = [0.0, 1.0, 2.0, 3.0]   # strengths 1/2/3 = "a little"/"somewhat"/"a lot", evenly spaced so the on-screen scale is the actual weight
 GAIN = 0.9          # sharpness of the "weighted"/"prominent" verdict sigmoid
 TALLY_GAIN = 0.95   # sharpness of the "tally" verdict sigmoid
 
@@ -39,6 +39,13 @@ MIN_DECISIONS = 6
 #   it's shown as "only past a point" if one bin holds more than STEP_SHARE of that rise.
 OFF_RANGE = 0.8
 STEP_SHARE = 0.6
+
+# A feature WITHOUT a direction prior only starts "on" if its raw correlation with the
+# participant's choices (about -1..1) is at least this strong; with ~20 answers a weaker
+# correlation is mostly noise, which is how a feature can end up with the wrong sign.
+SIGN_EVIDENCE_MIN = 0.15
+# How much steeper one end of a curve must be than the other to be called "first/last counts most".
+SHAPE_SLOPE_RATIO = 1.4
 
 
 def _softplus(r):
@@ -107,6 +114,25 @@ def _bin_layout(key):
     return binof, width, edges
 
 
+def _direction_prior(key):
+    """+1 / -1 if features.json fixes this feature's starting direction, else None."""
+    p = features.FEATURE_BY_KEY[key].get("direction_prior")
+    return 1.0 if p == "favor" else (-1.0 if p == "against" else None)
+
+
+def _sign_evidence(queries):
+    """Per-feature correlation-like evidence in [-1, 1] between (A - B) gap and the choice."""
+    ys = np.array([y - 0.5 for a, b, y in queries], dtype=float)
+    out = {}
+    for k in features.FEATURE_KEYS:
+        lv = _levels(k)
+        span = float(lv[-1] - lv[0]) or 1.0
+        x = np.array([(a[k] - b[k]) / span for a, b, y in queries], dtype=float)
+        denom = float(np.sqrt((x ** 2).sum() * (ys ** 2).sum()))
+        out[k] = float((x * ys).sum() / denom) if denom > 0 else 0.0
+    return out
+
+
 def _fit_curves(queries, lr=0.15, lam=0.05, iters=700, gain=GAIN):
     """
     Jointly fits one monotonic step function per feature against the same set
@@ -133,7 +159,8 @@ def _fit_curves(queries, lr=0.15, lam=0.05, iters=700, gain=GAIN):
     polarity = {}
     for k in keys:
         c = sum((a[k] - b[k]) * (y - 0.5) for a, b, y in queries)
-        polarity[k] = 1.0 if c >= 0 else -1.0
+        prior = _direction_prior(k)
+        polarity[k] = prior if prior is not None else (1.0 if c >= 0 else -1.0)
 
     def cumulative(k):
         C = np.zeros(gaps[k] + 1)
@@ -201,12 +228,18 @@ def _curve_to_params(key, curve, polarity):
             j = int(np.argmax(inc))
             cutoff = float(levels[(edges[j] + edges[j + 1] + 1) // 2])
         else:
-            diminishing = True
-            for i in range(1, inc.size):
-                if inc[i] > inc[i - 1] + 1e-6:
-                    diminishing = False
-                    break
-            mode = "first" if (diminishing and inc.size > 2) else "steady"
+            # Judge the shape from slopes (score per unit of the feature), not raw increments:
+            # levels are not evenly spaced (e.g. rejection risk 1,2,5,10,15), and a steady
+            # rule means equal slopes.
+            gaps = np.diff(levels[edges])
+            slopes = inc / np.where(gaps > 0, gaps, 1.0)
+            if slopes.size > 2 and slopes.max() > 0:
+                falling = all(slopes[i] <= slopes[i - 1] * 1.1 for i in range(1, slopes.size))
+                rising = all(slopes[i] >= slopes[i - 1] / 1.1 for i in range(1, slopes.size))
+                if falling and slopes[0] >= SHAPE_SLOPE_RATIO * max(slopes[-1], 1e-9):
+                    mode = "first"
+                elif rising and slopes[-1] >= SHAPE_SLOPE_RATIO * max(slopes[0], 1e-9):
+                    mode = "last"
 
     others = [k for k in features.FEATURE_KEYS if k != key]
     return {
@@ -261,6 +294,8 @@ def edit_value(model, key, v):
         mag = 1.0 if v >= st["cutoff"] else 0.0
     elif st["mode"] == "first":
         mag = math.log1p(max(0.0, v - lo)) / math.log1p(hi - lo) if hi > lo else 0.0
+    elif st["mode"] == "last":
+        mag = 1.0 - math.log1p(max(0.0, hi - v)) / math.log1p(hi - lo) if hi > lo else 0.0
     else:
         mag = (v - lo) / (hi - lo) if hi > lo else 0.0
     sign = 1.0 if st["dir"] == "favor" else -1.0
@@ -374,6 +409,8 @@ def feature_sentence(model, key):
             s = f"Reaching {_fmt_num(st['cutoff'])} or more {noun} counts {side}, while less makes no difference."
     elif st["mode"] == "first":
         s = f"More {noun} counts {side}, and the first bit matters the most."
+    elif st["mode"] == "last":
+        s = f"More {noun} counts {side}, and the last bit matters the most."
     else:
         s = f"More {noun} counts {side}, with each additional bit mattering the same."
     if st["cond"]["on"]:
@@ -446,6 +483,10 @@ def train_twostage(decisions, override=None):
                 "features": {k: _curve_to_params(k, learned[k], polarity[k])
                              for k in features.FEATURE_KEYS},
             }
+            evidence = _sign_evidence(queries)
+            for k in features.FEATURE_KEYS:
+                if _direction_prior(k) is None and abs(evidence[k]) < SIGN_EVIDENCE_MIN:
+                    model["features"][k]["matters"] = 0
         except Exception:
             model = {"type": "twostage", **_default_model()}
 

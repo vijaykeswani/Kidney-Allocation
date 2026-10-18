@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for every feature used in the study. To swap in a different set of features later, edit this file only \u2014 app.py, fft_model.py, fft_component.py and model.html all read their feature-specific data from here rather than hardcoding it. Order here is the order features appear everywhere (dropdowns, patient cards, etc).",
+  "_comment": "Single source of truth for every feature used in the study. To swap in a different set of features later, edit this file only \u2014 app.py, fft_model.py, fft_component.py and model.html all read their feature-specific data from here rather than hardcoding it. Order here is the order features appear everywhere (dropdowns, patient cards, etc). 'direction_prior' (optional, 'favor'|'against'): the trainer assumes this direction instead of inferring it from ~20 noisy answers; participants can still change it when editing.",
   "features": [
     {
       "key": "dependents",
@@ -38,7 +38,8 @@
         5,
         7,
         9
-      ]
+      ],
+      "direction_prior": "favor"
     },
     {
       "key": "rejection_risk",
@@ -78,7 +79,8 @@
         15,
         20,
         25
-      ]
+      ],
+      "direction_prior": "favor"
     },
     {
       "key": "violent_crimes",

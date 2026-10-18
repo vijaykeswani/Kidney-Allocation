@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import info %}
 {% block content %}
 <div class="progress-track"><div class="progress-fill" style="width:{{ (idx / n_total * 100) | round(1) }}%"></div></div>
 <div class="muted" style="font-size:15px; font-weight:500; margin-top:12px; margin-bottom:26px;">
@@ -16,7 +17,7 @@
     <div class="patient-label a">Patient A</div>
     {% for p in features %}
     <div class="feature-row">
-      <div class="feature-name">{{ feature_labels.get(p, p.replace('_',' ')|title) }}</div>
+      <div class="feature-name">{{ feature_labels.get(p, p.replace('_',' ')|title) }}{{ info(descriptions.get(p)) }}</div>
       <div class="feature-value">{{ sc.A[p] | round(1) if sc.A[p] % 1 else sc.A[p]|int }}</div>
     </div>
     {% endfor %}
@@ -25,7 +26,7 @@
     <div class="patient-label b">Patient B</div>
     {% for p in features %}
     <div class="feature-row">
-      <div class="feature-name">{{ feature_labels.get(p, p.replace('_',' ')|title) }}</div>
+      <div class="feature-name">{{ feature_labels.get(p, p.replace('_',' ')|title) }}{{ info(descriptions.get(p)) }}</div>
       <div class="feature-value">{{ sc.B[p] | round(1) if sc.B[p] % 1 else sc.B[p]|int }}</div>
     </div>
     {% endfor %}

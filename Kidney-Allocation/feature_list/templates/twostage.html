@@ -52,8 +52,6 @@
 .ts-btn.active.against { background: var(--patient-b); border-color: var(--patient-b); }
 .ts-cutoff { width: 70px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); }
 select.ts-cutoff { width: auto; min-width: 70px; }
-.ts-strength-slider-row { align-items: center; gap: 10px; margin-top: -2px; }
-.ts-strength-slider { flex: 1; max-width: 220px; accent-color: var(--accent); }
 .ts-strength-val { font-size: 12.5px; color: var(--text-muted); min-width: 24px; }
 .ts-sentence { font-size: 14px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
 .ts-off { opacity: .7; }
@@ -90,30 +88,15 @@ select.ts-cutoff { width: auto; min-width: 70px; }
 .ts-summary-text b.favor { color: var(--patient-a); }
 .ts-summary-text b.against { color: var(--patient-b); }
 
-.ts-modal-backdrop {
   position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none;
   align-items: center; justify-content: center; padding: 24px; z-index: 200;
 }
-.ts-modal-dialog {
   background: #fff; border-radius: 16px; width: 100%; max-width: 760px; max-height: 88vh;
   display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(15,23,42,.25);
 }
-.ts-modal-header { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.ts-modal-title { font-size: 16px; font-weight: 600; flex: 1; }
-.ts-modal-close { font-size: 15px; color: var(--text-muted); background: none; border: none; cursor: pointer; width: 28px; height: 28px; border-radius: 6px; }
-.ts-modal-close:hover { background: var(--surface); }
-.ts-modal-body { padding: 18px 20px 24px; overflow-y: auto; }
 
-.ts-case-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 6px; margin-bottom: 10px; }
-.ts-case-chip { aspect-ratio: 1; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; border: 2px solid transparent; }
-.ts-case-legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; }
-.ts-case-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 
-.ts-case-card, .ts-builder-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
-.ts-prow { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
 
-.ts-slider-row { margin-bottom: 10px; }
-.ts-slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
 
 /* Final page: everything that ISN'T the model's actual setting fades back,
    so what's left in full colour is unmistakably the final model. */
@@ -142,10 +125,46 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 .ts-delta .same { color: var(--text-muted); }
 .ts-btn.has-ico { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
 .ts-shape-ico { display: block; }
+
+/* ── strength scale, relative-strength overview, lock-in note ── */
+/* strength slider: track and thumb are styled explicitly so the 1 / 2 / 3 labels sit at the thumb's exact positions */
+.ts-slider-wrap { position: relative; width: 270px; max-width: 100%; margin: 0 26px; --thumb: 18px; }
+.ts-strength-slider { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 22px; margin: 0; background: transparent; cursor: pointer; }
+.ts-strength-slider:disabled { cursor: default; opacity: .6; }
+.ts-strength-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
+  background: linear-gradient(to right, var(--accent) 0, var(--accent) calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--f, .5)), var(--surface-alt) calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--f, .5)), var(--surface-alt) 100%); }
+.ts-strength-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--thumb); height: var(--thumb); border-radius: 50%; background: #fff; border: 2px solid var(--accent); margin-top: -6px; box-shadow: 0 1px 3px rgba(15,23,42,.3); }
+.ts-strength-slider::-moz-range-track { height: 6px; border-radius: 3px; background: var(--surface-alt); }
+.ts-strength-slider::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+.ts-strength-slider::-moz-range-thumb { box-sizing: border-box; width: var(--thumb); height: var(--thumb); border-radius: 50%; background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(15,23,42,.3); }
+.ts-ticks { position: relative; height: 34px; margin-top: 2px; font-size: 12px; color: var(--text-secondary); }
+.ts-ticks span { position: absolute; top: 0; left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--f)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; line-height: 1.25; white-space: nowrap; }
+.ts-ticks small { font-size: 10.5px; color: var(--text-muted); }
+.ts-agg-card { display: flex; align-items: center; gap: 16px; }
+.ts-agg-text { flex: 1; }
+.ts-agg-ico { flex-shrink: 0; display: block; }
+.ts-strength-slider-row { align-items: center; gap: 12px; margin-top: -2px; }
+.ts-strength-val { font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.ts-strength-val b { color: var(--text); font-variant-numeric: tabular-nums; }
+.ts-mini { display: block; height: 4px; background: var(--surface-alt); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.ts-mini i { display: block; height: 100%; border-radius: 3px; }
+.ts-mini i.favor { background: var(--patient-a); } .ts-mini i.against { background: var(--patient-b); }
+.ts-feat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ts-overview { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; }
+.ts-overview-title { font-size: 12.5px; color: var(--text-muted); margin-bottom: 8px; }
+.ts-ov-row { display: grid; grid-template-columns: 170px 1fr 150px; gap: 10px; align-items: center; font-size: 13.5px; padding: 3px 0; }
+.ts-ov-row .ts-mini { margin: 0; height: 8px; }
+.ts-ov-note { font-size: 12px; color: var(--text-muted); text-align: right; white-space: nowrap; }
+.ts-lock-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin: 6px 0 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+
+/* ── per-case explanation ── */
 </style>
 {% endblock %}
 {% block content %}
-<h2>This is how the AI thinks you are making your decisions. Is it correct?</h2>
+{% if not final_mode %}
+<h2>We’ve built an AI model from your answers so far</h2>
+<p class="muted" style="font-size:15px; line-height:1.6; margin:0 0 18px;">It tries to predict the choices you would make in new cases. Take some time to look it over, and use the controls below to change anything that doesn’t match how you really decide.</p>
+{% endif %}
 <div class="muted" style="font-size:15px; margin:8px 0 18px; line-height:1.6;">
   Follow the steps below. You can make changes to the model AI learned, as you see fit, to better
   reflect your decision-making process. The panel below also shows you how your changes impact
@@ -161,30 +180,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
   <div class="ts-match-chevron">→</div>
 </button>
 
-<div class="ts-modal-backdrop" id="ts-modal-backdrop">
-  <div class="ts-modal-dialog">
-    <div class="ts-modal-header">
-      <div class="ts-modal-title">See how your model performs</div>
-      <button class="ts-modal-close" id="ts-modal-close" type="button">✕</button>
-    </div>
-    <div class="ts-modal-body">
-      <div class="muted" style="font-size:13px; margin-bottom:10px;">
-        Each square is one of your <span id="ts-case-total"></span> cases. Tap any square to see that pair and what your model predicts.
-      </div>
-      <div class="ts-case-grid" id="ts-case-grid"></div>
-      <div class="ts-case-legend">
-        <span><span class="sw" style="background:var(--patient-a-soft); border:1px solid var(--patient-a);"></span>agrees with your choice</span>
-        <span><span class="sw" style="background:var(--patient-b-soft); border:1px solid var(--patient-b);"></span>disagrees</span>
-      </div>
-      <div id="ts-case-detail"></div>
-
-      <hr style="margin:26px 0; border:none; border-top:1px solid var(--border);">
-      <div style="font-size:16px; font-weight:600; margin-bottom:4px;">Try your own case</div>
-      <div class="muted" style="font-size:13px; margin-bottom:14px;">Set up any two patients and see how your model would decide between them.</div>
-      <div id="ts-builder"></div>
-    </div>
-  </div>
-</div>
+{% include "_case_overlay.html" %}
 
 <div class="ts-step-title">Step 1. Check if the model is correct about how you consider each feature.</div>
 <div class="ts-step-sub">
@@ -195,6 +191,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
   to be chosen; bars that <b class="down">fall</b> mean it makes them <b class="down">less likely</b>; flat bars mean it makes no difference.
 </div>
 
+<div class="ts-overview" id="ts-overview"></div>
 <div class="ts-grid" id="ts-features"></div>
 
 <div class="ts-step-title">Step 2. Check if this is how you combine the features.</div>
@@ -219,8 +216,9 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 <div class="muted" style="font-size:14px; margin-bottom:14px;">1 = not at all &nbsp;&nbsp;·&nbsp;&nbsp; 7 = perfectly</div>
 <div style="display:flex; gap:8px; margin-bottom:20px;" id="ts-score-row"></div>
 
+<div class="ts-lock-note">When you continue, your model is <b>locked in</b> and won’t change again. Next you’ll make a few more choices, which test how well it predicts you on cases it has never seen. Any edits you haven’t applied yet are saved first.</div>
 <div style="display:flex; justify-content:flex-end;">
-  <button class="btn btn-primary" id="ts-continue" type="button">Continue to Part 2 →</button>
+  <button class="btn btn-primary" id="ts-continue" type="button">Lock in my model and continue →</button>
 </div>
 {% else %}
 <div style="margin:28px 0;">
@@ -242,8 +240,12 @@ var RATE_URL = {{ rate_url | tojson }};
 var CONTINUE_URL = {{ continue_url | tojson }};
 var currentScore = {{ current_score | tojson }};
 var BASELINE_MATCHES = {{ baseline_matches | tojson }};
+var LOG_URL = {{ log_url | tojson }};
+var FINAL_EDITED = {{ final_edited | tojson }};
+var FINAL_ARM = {{ final_arm | tojson }};
+var INITIAL_MODEL_JSON = null;     // snapshot at page load, to know whether there are unsaved edits
 
-var AMP = [0, 1.0, 2.0, 3.2];
+var AMP = [0, 1.0, 2.0, 3.0];   // strengths 1/2/3 = a little / somewhat / a lot: the on-screen scale IS the weight
 var GAIN = 0.9, TALLY_GAIN = 0.95;
 
 // Mirrors twostage_model._amp_for in Python exactly.
@@ -260,6 +262,7 @@ function editValueFor(st, key, v) {
   var r = FEATURE_RANGES[key], lo = r.min, hi = r.max, mag;
   if (st.mode === 'anyvsnone') mag = v >= st.cutoff ? 1 : 0;
   else if (st.mode === 'first') mag = (hi > lo) ? Math.log1p(Math.max(0, v - lo)) / Math.log1p(hi - lo) : 0;
+  else if (st.mode === 'last') mag = (hi > lo) ? 1 - Math.log1p(Math.max(0, hi - v)) / Math.log1p(hi - lo) : 0;
   else mag = (hi > lo) ? (v - lo) / (hi - lo) : 0;
   return ampFor(st.matters) * mag * (st.dir === 'favor' ? 1 : -1);
 }
@@ -277,11 +280,53 @@ var tsDrag = null;    // while a slider is dragged, the whole drag counts as one
 
 function cloneJSON(x) { return JSON.parse(JSON.stringify(x)); }
 
+// ── event log (one row per interaction; analysed alongside the saved model) ──
+function logEvent(name, detail) {
+  if (!LOG_URL) return;
+  try {
+    var d = detail || {}; d.page = FINAL_MODE ? 'final' : 'results';
+    fetch(LOG_URL, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({event: name, detail: d})}).catch(function() {});
+  } catch (e) {}
+}
+function editDetail(key, extra) {
+  var st = key && model.features[key] ? model.features[key] : null;
+  var d = st ? {feature: key, matters: st.matters, dir: st.dir, mode: st.mode, cutoff: st.cutoff, exception: !!st.cond.on} : {aggregation: model.aggregation};
+  if (tsDelta) { d.gained = tsDelta.gained; d.lost = tsDelta.lost; d.flipped = tsDelta.flipped; d.now = tsDelta.now; }
+  for (var k in (extra || {})) d[k] = extra[k];
+  return d;
+}
+function descOf(key) {
+  var f = FEATURES_DATA.filter(function(x) { return x.key === key; })[0];
+  return f ? (f.description || '') : '';
+}
+// (i) icon with the factor's definition and scale (same text as the intro screen)
+function infoIcon(key) {
+  var d = descOf(key);
+  return d ? '<span class="info" tabindex="0" role="note" data-tip="' + esc(d).replace(/"/g, '&quot;') + '">i</span>' : '';
+}
+function strengthBar(key) {
+  var st = model.features[key];
+  return '<span class="ts-mini"><i class="' + (st.matters === 0 ? '' : st.dir) + '" style="width:' + (st.matters === 0 ? 0 : Math.min(100, st.matters / 3 * 100)).toFixed(0) + '%"></i></span>';
+}
+function strengthWordFor(m) { return m < 1.5 ? 'a little' : (m < 2.5 ? 'somewhat' : 'a lot'); }
+function renderFinalHeader(n, current) {
+  var who = FINAL_ARM === 'control' ? 'The AI model we trained on your first answers' : 'Your locked-in model';
+  document.getElementById('ts-match-line').textContent = n ? (who + ' correctly predicted ' + current + ' of your ' + n + ' new choices.') : '';
+  var sub;
+  if (FINAL_EDITED && BASELINE_MATCHES !== null) {
+    sub = BASELINE_MATCHES !== current
+      ? ('Before your edits it would have predicted ' + BASELINE_MATCHES + ' of ' + n + '. Tap to see each new choice.')
+      : ('Your edits didn\u2019t change how many it predicted. Tap to see each new choice.');
+  } else sub = 'Tap to see each of your new choices and what the model predicted.';
+  document.getElementById('ts-match-sub').textContent = sub;
+}
+
 function applyEdit(key, mutate) {
   var before = calls();
   tsGhost = {key: key, st: cloneJSON(model.features[key])};
   mutate(model.features[key]);
   tsDelta = deltaStats(key, before);
+  logEvent('model_edit', editDetail(key));
   refresh();
 }
 function applyAggEdit(agg) {
@@ -290,6 +335,7 @@ function applyAggEdit(agg) {
   tsGhost = null;
   model.aggregation = agg;
   tsDelta = deltaStats('__agg', before);
+  logEvent('model_edit', editDetail(null, {aggregation: agg}));
   refresh();
 }
 function sliderEdit(key, value) {
@@ -301,7 +347,7 @@ function sliderEdit(key, value) {
   tsGhost = null;
 }
 function sliderDone(key) {
-  if (tsDrag && tsDrag.key === key) { tsGhost = {key: key, st: tsDrag.st}; tsDrag = null; refresh(); }
+  if (tsDrag && tsDrag.key === key) { logEvent('model_edit', editDetail(key, {via: 'slider'})); tsGhost = {key: key, st: tsDrag.st}; tsDrag = null; refresh(); }
 }
 function softRefresh(key) {
   var st = model.features[key];
@@ -315,6 +361,8 @@ function softRefresh(key) {
   var dl = document.getElementById('ts-delta-' + key); if (dl) dl.innerHTML = deltaHTML(key);
   renderSummary();
   if (typeof renderStepPreviews === 'function') renderStepPreviews();
+  if (typeof renderFeatList === 'function') renderFeatList();
+  if (typeof renderOverview === 'function') renderOverview();
 }
 function calls() { return pastScenarios.map(function(sc) { return predict(sc.A, sc.B) === 1 ? 'A' : 'B'; }); }
 function deltaStats(key, beforeCalls) {
@@ -348,7 +396,7 @@ function shapeIcon(key, st, mode) {
   } else {
     for (i = 0; i <= N; i++) {
       var x = i / N;
-      pts.push([x, mode === 'first' ? Math.log1p(x * (r.max - r.min)) / Math.log1p(r.max - r.min) : x]);
+      pts.push([x, mode === 'first' ? Math.log1p(x * (r.max - r.min)) / Math.log1p(r.max - r.min) : (mode === 'last' ? 1 - Math.log1p((1 - x) * (r.max - r.min)) / Math.log1p(r.max - r.min) : x)]);
     }
   }
   var d = pts.map(function(p, k) { return (k ? 'L' : 'M') + (2 + p[0] * (W - 4)).toFixed(1) + ',' + (H - 2 - p[1] * (H - 4)).toFixed(1); }).join(' ');
@@ -497,6 +545,8 @@ function featureSentence(key) {
       : ("Reaching " + st.cutoff + " or more " + noun(key) + " counts " + side + ", while less makes no difference.");
   } else if (st.mode === 'first') {
     s = "More " + noun(key) + " counts " + side + ", and the first bit matters the most.";
+  } else if (st.mode === 'last') {
+    s = "More " + noun(key) + " counts " + side + ", and the last bit matters the most.";
   } else {
     s = "More " + noun(key) + " counts " + side + ", with each additional bit mattering the same.";
   }
@@ -533,168 +583,129 @@ function confWord(prob) {
   return 'weakly';
 }
 
-var tsCaseIdx = 0;
-
-function tsPredictions() {
-  return pastScenarios.map(function(sc) {
-    var prob = predictProb(sc.A, sc.B);
-    var modelChoice = prob > 0.5 ? 'A' : 'B';
-    return {sc: sc, prob: prob, modelChoice: modelChoice, agree: modelChoice === sc.choice};
+// ── Per-case explanation: which factors pushed toward which patient, and why the model chose as it did.
+// The headline follows the combine rule the participant is using (add up / count / most important).
+function explainCase(a, b, userChoice) {
+  var agg = model.aggregation || 'weighted';
+  var rows = FEATURES_DATA.map(function(f) {
+    var st = model.features[f.key], on = st.matters > 0;
+    var d = contrib(f.key, a) - contrib(f.key, b);
+    return {key: f.key, label: f.label, aVal: a[f.key], bVal: b[f.key], on: on, d: d,
+            favors: (on && Math.abs(d) > 1e-9) ? (d > 0 ? 'A' : 'B') : null,
+            gated: on && !!st.cond.on && (!condPass(f.key, a) || !condPass(f.key, b)), decides: false, unused: false};
   });
-}
-
-function renderCaseGrid() {
-  var preds = tsPredictions();
-  var grid = document.getElementById('ts-case-grid');
-  grid.innerHTML = '';
-  preds.forEach(function(p, i) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'ts-case-chip';
-    b.textContent = i + 1;
-    b.style.borderColor = i === tsCaseIdx ? 'var(--text-primary)' : 'transparent';
-    b.style.background = p.agree ? 'var(--patient-a-soft)' : 'var(--patient-b-soft)';
-    b.style.color = p.agree ? 'var(--patient-a)' : 'var(--patient-b)';
-    b.addEventListener('click', function() { tsCaseIdx = i; renderCaseGrid(); renderCaseDetail(); });
-    grid.appendChild(b);
-  });
-  document.getElementById('ts-case-total').textContent = preds.length;
-}
-
-function patientRows(patient) {
-  var html = '';
-  FEATURES_DATA.forEach(function(f) {
-    var bold = model.features[f.key].matters > 0;
-    html += '<div class="ts-prow" style="' + (bold ? 'font-weight:600;' : 'color:var(--text-secondary);') + '">'
-      + '<span>' + esc(f.label) + '</span><span>' + patient[f.key] + '</span></div>';
-  });
-  return html;
-}
-
-function renderCaseDetail() {
-  var preds = tsPredictions();
-  var host = document.getElementById('ts-case-detail');
-  if (!preds.length) { host.innerHTML = ''; return; }
-  var p = preds[tsCaseIdx];
-  var modelLabel = 'Patient ' + p.modelChoice + ' \u00b7 ' + confWord(p.modelChoice === 'A' ? p.prob : 1 - p.prob);
-
-  var html = '<div class="ts-case-card">';
-  html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">'
-    + '<div style="font-size:16px; font-weight:600;">Case ' + (tsCaseIdx + 1) + '</div>'
-    + '<div style="display:flex; gap:8px;">'
-    + '<button type="button" class="ts-btn" id="ts-case-prev">\u2190 Prev</button>'
-    + '<button type="button" class="ts-btn" id="ts-case-nextdis">Next disagreement</button>'
-    + '<button type="button" class="ts-btn" id="ts-case-next">Next \u2192</button>'
-    + '</div></div>';
-  html += '<div class="ts-grid">'
-    + '<div><div style="font-weight:600; color:var(--patient-a); margin-bottom:6px;">\u25cf Patient A</div>' + patientRows(p.sc.A) + '</div>'
-    + '<div><div style="font-weight:600; color:var(--patient-b); margin-bottom:6px;">\u25cf Patient B</div>' + patientRows(p.sc.B) + '</div>'
-    + '</div>';
-  html += '<div style="display:flex; gap:24px; align-items:center; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); flex-wrap:wrap;">'
-    + '<div><div style="font-size:12px; color:var(--text-muted);">You chose</div><div style="font-weight:600;">Patient ' + esc(p.sc.choice) + '</div></div>'
-    + '<div><div style="font-size:12px; color:var(--text-muted);">Your model would choose</div><div style="font-weight:600;">' + esc(modelLabel) + '</div></div>'
-    + '<div style="color:' + (p.agree ? 'var(--patient-a)' : 'var(--patient-b)') + '; font-weight:600;">'
-    + (p.agree ? '\u2713 matches your choice' : '\u2717 differs from your choice') + '</div>'
-    + '</div></div>';
-  host.innerHTML = html;
-
-  document.getElementById('ts-case-prev').addEventListener('click', function() {
-    tsCaseIdx = (tsCaseIdx - 1 + preds.length) % preds.length; renderCaseGrid(); renderCaseDetail();
-  });
-  document.getElementById('ts-case-next').addEventListener('click', function() {
-    tsCaseIdx = (tsCaseIdx + 1) % preds.length; renderCaseGrid(); renderCaseDetail();
-  });
-  document.getElementById('ts-case-nextdis').addEventListener('click', function() {
-    for (var i = 1; i <= preds.length; i++) {
-      var j = (tsCaseIdx + i) % preds.length;
-      if (!preds[j].agree) { tsCaseIdx = j; break; }
+  var winner = predictProb(a, b) > 0.5 ? 'A' : 'B';
+  var nA = rows.filter(function(r) { return r.favors === 'A'; }).length;
+  var nB = rows.filter(function(r) { return r.favors === 'B'; }).length;
+  var none = 'None of the factors you\u2019ve switched on differ between these two patients, so the model has nothing to go on and defaults to Patient B.';
+  var head, decider = null;
+  if (agg === 'tally') {
+    if (nA + nB === 0) head = none;
+    else if (nA === nB) head = 'The same number of factors favor each patient (' + nA + ' each), so the model defaults to Patient B.';
+    else head = 'The model picks Patient ' + winner + ': more factors favor ' + winner + ' (' + (winner === 'A' ? nA : nB) + ' vs ' + (winner === 'A' ? nB : nA) + '). It counts factors, not how big each difference is.';
+  } else if (agg === 'prominent') {
+    var order = FEATURES_DATA.map(function(f) { return f.key; }).sort(function(x, y) { return ampFor(model.features[y].matters) - ampFor(model.features[x].matters); });
+    var seen = false;
+    order.forEach(function(k) {
+      var r = rows.filter(function(q) { return q.key === k; })[0];
+      if (!decider && r.on && Math.abs(r.d) > 1e-9) { decider = r; r.decides = true; seen = true; }
+      else if (seen && r.favors) r.unused = true;
+    });
+    head = decider ? 'The model picks Patient ' + winner + ': the most important factor that differs between them is ' + decider.label + ', and it favors ' + winner + '. Less important factors aren\u2019t consulted.' : none;
+  } else {
+    var z = rows.reduce(function(s, r) { return s + (r.on ? r.d : 0); }, 0), net = Math.abs(z);
+    if (nA + nB === 0) head = none;
+    else if (net < 1e-9) head = 'The factors cancel out exactly, so the model defaults to Patient B.';
+    else {
+      var topW = null;
+      rows.forEach(function(r) { if (r.favors === winner && (!topW || Math.abs(r.d) > Math.abs(topW.d))) topW = r; });
+      head = 'The model picks Patient ' + winner + ': adding up every factor, ' + winner + ' comes out ahead by ' + net.toFixed(1) + '.'
+        + (topW ? ' The biggest factor favoring ' + winner + ' is ' + topW.label + '.' : '') + (net < 0.5 ? ' It\u2019s a close call.' : '');
     }
-    renderCaseGrid(); renderCaseDetail();
-  });
-}
-
-var tsBuilderVals = null;
-
-function renderBuilder() {
-  if (!tsBuilderVals) {
-    tsBuilderVals = {A: {}, B: {}};
-    FEATURES_DATA.forEach(function(f) {
-      var r = FEATURE_RANGES[f.key], vs0 = valuesOf(f.key), mid = vs0 ? vs0[Math.floor(vs0.length / 2)] : Math.round((r.min + r.max) / 2);
-      tsBuilderVals.A[f.key] = mid;
-      tsBuilderVals.B[f.key] = mid;
-    });
   }
-  var host = document.getElementById('ts-builder');
-  var html = '<div class="ts-grid">';
-  ['A', 'B'].forEach(function(side) {
-    html += '<div><div style="font-weight:600; color:var(--patient-' + side.toLowerCase() + '); margin-bottom:8px;">\u25cf Patient ' + side + '</div>';
-    FEATURES_DATA.forEach(function(f) {
-      var r = FEATURE_RANGES[f.key];
-      html += '<div class="ts-slider-row"><div class="ts-slider-head"><span>' + esc(f.label) + '</span>'
-        + '<span id="ts-b-' + side + '-' + f.key + '-val" style="font-weight:600;">' + tsBuilderVals[side][f.key] + '</span></div>'
-        + (valuesOf(f.key)
-            ? '<input type="range" min="0" max="' + (valuesOf(f.key).length - 1) + '" step="1" value="' + Math.max(0, valuesOf(f.key).indexOf(tsBuilderVals[side][f.key])) + '" data-idx="1" '
-            : '<input type="range" min="' + r.min + '" max="' + r.max + '" value="' + tsBuilderVals[side][f.key] + '" ')
-        + 'data-side="' + side + '" data-key="' + f.key + '" style="width:100%;"></div>';
-    });
-    html += '</div>';
-  });
-  html += '</div><div id="ts-builder-verdict" class="ts-builder-card" style="margin-top:14px;"></div>';
-  host.innerHTML = html;
-
-  host.querySelectorAll('input[type=range]').forEach(function(inp) {
-    inp.addEventListener('input', function() {
-      var side = inp.getAttribute('data-side'), key = inp.getAttribute('data-key');
-      var chosen = inp.hasAttribute('data-idx') ? valuesOf(key)[parseInt(inp.value, 10)] : parseInt(inp.value, 10);
-      tsBuilderVals[side][key] = chosen;
-      document.getElementById('ts-b-' + side + '-' + key + '-val').textContent = chosen;
-      renderBuilderVerdict();
-    });
-  });
-  renderBuilderVerdict();
-}
-
-function renderBuilderVerdict() {
-  var a = tsBuilderVals.A, b = tsBuilderVals.B;
-  var prob = predictProb(a, b);
-  var ch = prob > 0.5 ? 'A' : 'B';
-  var conf = confWord(ch === 'A' ? prob : 1 - prob);
-  var html = '<div style="font-size:15px;">Your model would choose <b style="color:var(--patient-' + ch.toLowerCase() + ');">Patient ' + ch + '</b>, ' + conf + '.</div>';
-  var bits = [];
-  FEATURES_DATA.forEach(function(f) {
-    if (model.features[f.key].matters === 0) return;
-    var sa = contrib(f.key, a), sb = contrib(f.key, b);
-    if (Math.abs(sa - sb) < 1e-9) return;
-    var favored = sa > sb ? 'A' : 'B';
-    bits.push('<span>' + esc(f.label) + ': <b style="color:var(--patient-' + favored.toLowerCase() + ');">favours ' + favored + '</b></span>');
-  });
-  if (bits.length) {
-    html += '<div style="margin-top:8px; font-size:13px; color:var(--text-secondary); display:flex; gap:16px; flex-wrap:wrap;">' + bits.join('') + '</div>';
+  var note = null;
+  if (userChoice && userChoice !== winner) {
+    var U = userChoice, W = winner, hint = !FINAL_MODE;
+    if (nA + nB === 0) {
+      note = 'You chose Patient ' + U + ', but none of the factors in this model differ between these two patients, so it had nothing to go on.';
+      if (hint) note += ' If something about them mattered to you, check whether a factor is set to \u201cdoesn\u2019t matter\u201d.';
+    } else if (agg === 'tally') {
+      note = nA === nB ? 'You chose Patient ' + U + ', but the factors are tied and the model defaults to Patient B.'
+                       : 'You chose Patient ' + U + ', but more factors favor ' + W + ' (' + (W === 'A' ? nA : nB) + ' to ' + (W === 'A' ? nB : nA) + ').';
+      if (hint) note += ' If the size of a difference matters to you, try \u201cadd up\u201d in Step 2.';
+    } else if (agg === 'prominent') {
+      note = 'You chose Patient ' + U + ', but the most important factor that differs (' + decider.label + ') favors ' + W + '.';
+      if (hint) note += ' If that factor shouldn\u2019t decide on its own, try a different way of combining factors in Step 2.';
+    } else {
+      var sU = 0, sW = 0;
+      rows.forEach(function(r) { if (r.favors === U) sU += Math.abs(r.d); else if (r.favors === W) sW += Math.abs(r.d); });
+      if (Math.abs(z) < 1e-9 && sU > 0) note = 'You chose Patient ' + U + '. The factors cancel out exactly (' + sU.toFixed(1) + ' each way), and the model defaults to Patient B.';
+      else if (sU > 0) note = 'You chose Patient ' + U + '. The factors favoring ' + U + ' add up to ' + sU.toFixed(1) + ', but the factors favoring ' + W + ' add up to ' + sW.toFixed(1) + '.';
+      else note = 'You chose Patient ' + U + '. None of the factors in this model favors Patient ' + U + ' for these two patients, so it can\u2019t account for your choice.';
+      if (hint) note += sU > 0 ? ' If ' + U + '\u2019s factors should count for more, raise their strength in Step 1.'
+                              : ' If something about Patient ' + U + ' mattered to you here, check whether a factor is set to \u201cdoesn\u2019t matter\u201d or pointing the wrong way.';
+    }
   }
-  document.getElementById('ts-builder-verdict').innerHTML = html;
+  return {winner: winner, agg: agg, rows: rows, head: head, note: note};
+}
+function explainHTML(a, b, userChoice) {
+  var ex = explainCase(a, b, userChoice), agg = ex.agg;
+  var active = ex.rows.filter(function(r) { return r.on; });
+  active.sort(function(x, y) { return (y.favors ? 1 : 0) - (x.favors ? 1 : 0) || Math.abs(y.d) - Math.abs(x.d); });
+  var html = '<div class="why"><div class="why-head">' + esc(ex.head) + '</div>'
+    + '<div class="why-legend"><span>Factor</span><span class="mid"><span class="a">A</span><span class="b">B</span></span><span class="mid"><span class="a">\u25c0 favors Patient A</span><span class="b">favors Patient B \u25b6</span></span><span></span></div>';
+  active.forEach(function(r) {
+    var w = agg === 'tally' ? (r.favors ? 100 : 0) : Math.min(100, Math.abs(r.d) / CHART_MAX * 100);
+    var note = !r.favors ? (Number(r.aVal) !== Number(r.bVal) ? 'counts the same for both' : 'no difference')
+      : agg === 'tally' ? '1 vote for ' + r.favors
+      : (agg === 'prominent' && r.decides) ? 'decides \u2192 ' + r.favors
+      : (agg === 'prominent' && r.unused) ? 'not consulted'
+      : 'favors ' + r.favors + ' +' + Math.abs(r.d).toFixed(1);
+    if (r.gated) note += ' \u00b7 exception: doesn\u2019t count here';
+    html += '<div class="why-row' + (r.favors ? '' : ' quiet') + (r.decides ? ' decides' : '') + '">'
+      + '<span class="lab">' + esc(r.label) + infoIcon(r.key) + '</span>'
+      + '<span class="vals">A ' + esc(r.aVal) + ' \u00b7 B ' + esc(r.bVal) + '</span>'
+      + '<span class="why-bar"><span class="h l">' + (r.favors === 'A' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span>'
+      + '<span class="h r">' + (r.favors === 'B' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span></span>'
+      + '<span class="note">' + esc(note) + '</span></div>';
+  });
+  var off = ex.rows.filter(function(r) { return !r.on; }).map(function(r) { return r.label; });
+  if (off.length) html += '<div class="why-off">Not used (set to \u201cdoesn\u2019t matter\u201d): ' + esc(off.join(', ')) + '</div>';
+  if (ex.note) html += '<div class="why-note">' + esc(ex.note) + '</div>';
+  return html + '</div>';
 }
 
-document.getElementById('ts-match-panel').addEventListener('click', function() {
-  document.getElementById('ts-modal-backdrop').style.display = 'flex';
-  tsCaseIdx = 0;
-  renderCaseGrid();
-  renderCaseDetail();
-  renderBuilder();
-});
-document.getElementById('ts-modal-close').addEventListener('click', function() {
-  document.getElementById('ts-modal-backdrop').style.display = 'none';
-});
-document.getElementById('ts-modal-backdrop').addEventListener('click', function(e) {
-  if (e.target === this) this.style.display = 'none';
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') document.getElementById('ts-modal-backdrop').style.display = 'none';
-});
+// ── adapter for the shared "See how your model performs" overlay (templates/_case_overlay.html) ──
+window.CaseAdapter = {
+  features: FEATURES_DATA,
+  ranges: FEATURE_RANGES,
+  valuesOf: valuesOf,
+  past: function() { return pastScenarios; },
+  predict: function(a, b) { var p = predictProb(a, b), ch = p > 0.5 ? 'A' : 'B'; return {choice: ch, how: confWord(ch === 'A' ? p : 1 - p)}; },
+  inUse: function(key) { return model.features[key].matters > 0; },
+  explain: function(a, b, userChoice) { return explainHTML(a, b, userChoice); },
+  infoIcon: infoIcon,
+  logEvent: logEvent
+};
+document.getElementById('ts-match-panel').addEventListener('click', function() { CaseOverlay.open(); });
 
 function colorize(sentence) {
   return esc(sentence)
     .replace(/in a patient&#39;s favor|in a patient\u2019s favor/g, '<b class="favor">in a patient\u2019s favor</b>')
     .replace(/against a patient/g, '<b class="against">against a patient</b>');
+}
+
+// Relative strength of every factor on ONE scale, so "a lot" for two factors visibly reads as equal.
+function renderOverview() {
+  var host = document.getElementById('ts-overview');
+  if (!host) return;
+  var html = '<div class="ts-overview-title">How strongly each factor counts (on the same 1\u20133 scale)</div>';
+  FEATURES_DATA.forEach(function(f) {
+    var st = model.features[f.key];
+    var note = st.matters === 0 ? 'no effect' : ((st.dir === 'favor' ? 'helps \u00b7 ' : 'against \u00b7 ') + strengthWordFor(st.matters) + ' (' + st.matters.toFixed(1) + ')');
+    html += '<div class="ts-ov-row"><span>' + esc(f.label) + infoIcon(f.key) + '</span>' + strengthBar(f.key) + '<span class="ts-ov-note">' + note + '</span></div>';
+  });
+  host.innerHTML = html;
 }
 
 function renderSummary() {
@@ -714,6 +725,7 @@ function renderSummary() {
   var lines = FEATURES_DATA.map(function(f) { return featureSentence(f.key); });
   lines.push(aggSentence(model.aggregation));
   document.getElementById('ts-summary-text').innerHTML = lines.map(colorize).join(' ');
+  if (FINAL_MODE) renderFinalHeader(n, current);
 }
 
 function renderFeatures() {
@@ -728,7 +740,7 @@ function renderFeatures() {
 
     var badgeCls = st.matters === 0 ? 'none' : st.dir;
     var badgeTxt = st.matters === 0 ? 'No effect' : (st.dir === 'favor' ? '\u2191 Helps them' : '\u2193 Counts against a patient');
-    var html = '<div class="ts-fhead"><div class="ts-fname">' + esc(f.label) + '</div>'
+    var html = '<div class="ts-fhead"><div class="ts-fname">' + esc(f.label) + infoIcon(f.key) + '</div>'
       + '<div class="ts-badge ' + badgeCls + '">' + badgeTxt + '</div></div>';
     html += '<div class="ts-fdesc" id="ts-desc-' + f.key + '">' + esc(featureSentence(f.key)) + '</div>';
     var ghostNow = (tsGhost && tsGhost.key === f.key) ? tsGhost : null;
@@ -746,6 +758,7 @@ function renderFeatures() {
       html += '<div class="ts-row"><span class="lab">Shape</span><div class="ts-btns">'
         + btn('mode', f.key, 'anyvsnone', 'Only past a point', st.mode === 'anyvsnone', shapeIcon(f.key, st, 'anyvsnone'))
         + btn('mode', f.key, 'first', 'First counts most', st.mode === 'first', shapeIcon(f.key, st, 'first'))
+        + btn('mode', f.key, 'last', 'Last counts most', st.mode === 'last', shapeIcon(f.key, st, 'last'))
         + btn('mode', f.key, 'steady', 'Every bit counts the same', st.mode === 'steady', shapeIcon(f.key, st, 'steady'))
         + '</div></div>';
       if (st.mode === 'anyvsnone') {
@@ -756,11 +769,10 @@ function renderFeatures() {
         + btn('str', f.key, '2', 'Somewhat', Math.abs(st.matters - 2) < 0.05)
         + btn('str', f.key, '3', 'A lot', Math.abs(st.matters - 3) < 0.05)
         + '</div></div>';
-      html += '<div class="ts-row ts-strength-slider-row">'
-        + '<input type="range" class="ts-strength-slider" min="1" max="3" step="0.1" '
-        + 'value="' + st.matters + '" data-key="' + f.key + '"' + (FINAL_MODE ? ' disabled' : '') + '>'
-        + '<span class="ts-strength-val" id="ts-sval-' + f.key + '">' + st.matters.toFixed(1) + '</span>'
-        + '</div>';
+      html += '<div class="ts-row ts-strength-slider-row"><div class="ts-slider-wrap">'
+      + '<input type="range" class="ts-strength-slider" min="1" max="3" step="0.1" value="' + st.matters + '" data-key="' + f.key + '" style="--f:' + ((st.matters - 1) / 2).toFixed(3) + '"' + (FINAL_MODE ? ' disabled' : '') + '>'
+      + '<div class="ts-ticks"><span style="--f:0">1<small>a little</small></span><span style="--f:0.5">2<small>somewhat</small></span><span style="--f:1">3<small>a lot</small></span></div></div>'
+      + '<span class="ts-strength-val">strength <b id="ts-sval-' + f.key + '">' + st.matters.toFixed(1) + '</b> of 3</span></div>';
     }
     if (!FINAL_MODE) html += '<div class="ts-delta" id="ts-delta-' + f.key + '">' + deltaHTML(f.key) + '</div>';
     card.innerHTML = html;
@@ -788,7 +800,7 @@ function renderFeatures() {
     });
     host.querySelectorAll('.ts-strength-slider').forEach(function(inp) {
       var key = inp.getAttribute('data-key');
-      inp.addEventListener('input', function() { sliderEdit(key, parseFloat(inp.value)); });
+      inp.addEventListener('input', function() { inp.style.setProperty('--f', ((parseFloat(inp.value) - 1) / 2).toFixed(3)); sliderEdit(key, parseFloat(inp.value)); });
       inp.addEventListener('change', function() { sliderDone(key); });
     });
     host.querySelectorAll('[data-cutoff]').forEach(function(inp) {
@@ -807,6 +819,28 @@ function btn(kind, key, val, label, active, icon) {
     + (FINAL_MODE ? ' disabled' : '') + '>' + (icon || '') + '<span>' + esc(label) + '</span></button>';
 }
 
+// Small pictures for the three ways of combining factors (same idea as the shape icons): teal = Patient A, orange = Patient B.
+function aggIcon(val) {
+  var open = '<svg class="ts-agg-ico" width="98" height="57" viewBox="0 0 76 44" aria-hidden="true">';
+  if (val === 'weighted') {          // a balance: blocks of different sizes get ADDED UP on each side
+    return open + '<polygon points="38,27 33,41 43,41" style="fill:#94a3b8"/>'
+      + '<line x1="8" y1="29" x2="68" y2="19" style="stroke:#64748b;stroke-width:2;stroke-linecap:round"/>'
+      + '<rect x="10" y="21" width="15" height="6" rx="1.5" style="fill:var(--patient-a)"/>'
+      + '<rect x="12" y="15" width="11" height="6" rx="1.5" style="fill:var(--patient-a);opacity:.75"/>'
+      + '<rect x="13.5" y="9" width="8" height="6" rx="1.5" style="fill:var(--patient-a);opacity:.5"/>'
+      + '<rect x="54" y="15" width="11" height="6" rx="1.5" style="fill:var(--patient-b)"/></svg>';
+  }
+  if (val === 'tally') {             // votes: how many dots each side has, not how big they are
+    return open + '<circle cx="12" cy="14" r="5" style="fill:var(--patient-a)"/><circle cx="27" cy="14" r="5" style="fill:var(--patient-a)"/>'
+      + '<circle cx="19.5" cy="30" r="5" style="fill:var(--patient-a)"/>'
+      + '<line x1="40" y1="6" x2="40" y2="38" style="stroke:#cbd5e1;stroke-width:1.5;stroke-dasharray:3 3"/>'
+      + '<circle cx="58" cy="22" r="5" style="fill:var(--patient-b)"/></svg>';
+  }
+  return open + '<rect x="6" y="7" width="60" height="8" rx="3" style="fill:var(--patient-a)"/>'   // one factor decides; the rest fade
+    + '<rect x="6" y="19" width="38" height="8" rx="3" style="fill:#e2e8f0"/>'
+    + '<rect x="6" y="31" width="22" height="8" rx="3" style="fill:#e2e8f0"/></svg>';
+}
+
 function renderAgg() {
   var host = document.getElementById('ts-agg');
   host.innerHTML = '';
@@ -818,7 +852,7 @@ function renderAgg() {
   opts.forEach(function(o) {
     var el = document.createElement('div');
     el.className = 'ts-agg-card' + (model.aggregation === o.val ? ' active' : '');
-    el.innerHTML = '<div class="ts-agg-title">' + esc(o.t) + '</div><div class="ts-agg-desc">' + esc(o.d) + '</div>';
+    el.innerHTML = '<div class="ts-agg-text"><div class="ts-agg-title">' + esc(o.t) + '</div><div class="ts-agg-desc">' + esc(o.d) + '</div></div>' + aggIcon(o.val);
     if (!FINAL_MODE) {
       el.addEventListener('click', function() { applyAggEdit(o.val); });
     }
@@ -830,6 +864,7 @@ function renderAgg() {
 }
 
 function refresh() {
+  renderOverview();
   renderFeatures();
   renderAgg();
   tsGhost = null;
@@ -874,10 +909,16 @@ if (!FINAL_MODE) {
     })(i);
   }
   document.getElementById('ts-continue').addEventListener('click', function() {
-    window.location.href = CONTINUE_URL;
+    var b = this; b.disabled = true;
+    var go = function() { window.location.href = CONTINUE_URL; };
+    logEvent('lock_in_clicked', {unsaved_edits: JSON.stringify(model) !== INITIAL_MODEL_JSON});
+    if (JSON.stringify(model) !== INITIAL_MODEL_JSON) {
+      fetch(APPLY_URL, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({model: model})}).then(go).catch(go);
+    } else { go(); }
   });
 }
 
+INITIAL_MODEL_JSON = JSON.stringify(model);
 refresh();
 </script>
 {% endblock %}

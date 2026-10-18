@@ -180,6 +180,35 @@ def _model_type():
     return "fft"
 
 
+def _lock_model():
+    """
+    Freeze the participant's model (idempotent). Treatment arms freeze whatever
+    they ended up with (their edits, if any); control freezes the unedited
+    Part-1 model of its assigned display type. After this the model is never
+    retrained or edited: Part 2 is a genuine hold-out test of THIS model.
+    """
+    username = session["username"]
+    if db.get_frozen_model(username):
+        return db.get_frozen_model(username)
+    kind = _display_model_type()
+    is_control = _model_type() == "control"
+    handler = fl_handlers if kind in ("twostage", "twostage_v2") else dt_handlers
+    frozen = handler.freeze_model(username, use_override=not is_control)
+    if frozen is None:          # not enough Part-1 answers to build a model
+        return None
+    frozen["kind"] = kind
+    frozen["arm"] = "control" if is_control else "treatment"
+    frozen["edit_count"] = db.count_events(username, "model_edit_applied")
+    db.set_frozen_model(username, frozen)
+    db.log_event(username, "model_locked", {k: frozen[k] for k in
+                 ("kind", "arm", "edited", "edit_count", "matches_before_edit", "matches_at_lock", "n_part1")})
+    return frozen
+
+
+def _model_locked():
+    return bool(db.get_frozen_model(session["username"]))
+
+
 def _require_user():
     if "username" not in session:
         return redirect(url_for("intro"))
@@ -283,6 +312,8 @@ def questionnaire(part):
     n_total = len(scenarios)
 
     is_control = _model_type() == "control"
+    if part == 2:
+        _lock_model()           # Part 2 tests a model that is already fixed
 
     if idx >= n_total:
         if part == 1:
@@ -299,14 +330,14 @@ def questionnaire(part):
         subheading = "Here are some more pairs in the same format — just keep choosing as you have been."
     else:
         subheading = (
-            "Now that you've seen your model, here are a few more pairs in the same "
-            "format. This checks whether the model still matches how you'd actually choose."
+            "Your model is now locked in. These last pairs test how well it predicts "
+            "your choices on cases it has never seen — just choose as you naturally would."
         )
     return render_template(
         "questionnaire.html",
         part=part, idx=idx, n_total=n_total,
         sc=scenarios[idx], features=FEATURES,
-        feature_labels=FEATURE_LABELS,
+        feature_labels=FEATURE_LABELS, descriptions=PARAM_DESCRIPTIONS,
         heading=heading, subheading=subheading,
     )
 
@@ -331,6 +362,7 @@ def part2_intro():
     guard = _require_user()
     if guard:
         return guard
+    _lock_model()
     return redirect(url_for("questionnaire", part=2))
 
 
@@ -344,6 +376,7 @@ def control_transition():
     guard = _require_user()
     if guard:
         return guard
+    _lock_model()
     return render_template("control_transition.html")
 
 
@@ -363,6 +396,8 @@ def survey():
         answers["_arm"] = arm
         answers["_model_type"] = _model_type()
         answers["_display_model_type"] = _display_model_type()
+        frozen = db.get_frozen_model(session["username"]) or {}
+        answers["_model_edited"] = frozen.get("edited")
         db.set_survey_answers(session["username"], answers)
         db.log_event(session["username"], "survey_submitted", {"arm": arm})
         return redirect(url_for("done"))
@@ -389,6 +424,8 @@ def results():
     mt = _model_type()
     if mt == "control":
         return redirect(url_for("control_transition"))
+    if _model_locked():
+        return redirect(url_for("questionnaire", part=2))
     if mt == "twostage_v2":
         return fl_handlers.results_view_v2()
     if mt == "twostage":
@@ -401,9 +438,10 @@ def final():
     guard = _require_user()
     if guard:
         return guard
-    # Everyone ends on the same kind of page: a freshly-trained, UNEDITED
-    # model of the kind their condition used (control: the kind assigned at
-    # signup). The participant's own edits are deliberately not shown here.
+    # Everyone ends on the same kind of page: the model they were locked into
+    # (edited for treatment arms, unedited for control) and how it did on the
+    # Part-2 hold-out. Nothing is retrained here.
+    _lock_model()
     dmt = _display_model_type()
     if dmt == "twostage_v2":
         return fl_handlers.final_view_v2()
@@ -432,6 +470,8 @@ def apply_edit():
     guard = _require_user()
     if guard:
         return jsonify({"error": "not logged in"}), 401
+    if _model_locked():
+        return jsonify({"error": "Your model is locked in and can't be changed."}), 409
     payload = request.get_json(force=True, silent=True) or {}
     username = session["username"]
     if _model_type() in ("twostage", "twostage_v2"):
@@ -446,6 +486,8 @@ def reset_edit():
     guard = _require_user()
     if guard:
         return jsonify({"error": "not logged in"}), 401
+    if _model_locked():
+        return jsonify({"error": "Your model is locked in and can't be changed."}), 409
     username = session["username"]
     db.delete_fft_override(username)
     dt_handlers.clear_cache()
