@@ -401,6 +401,11 @@ def delete_fft_override(username):
         conn.execute("UPDATE users SET fft_override=NULL WHERE username=?", (username,))
 
 
+def user_exists(username):
+    with _connect() as conn:
+        return conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone() is not None
+
+
 def get_feature_order(username):
     with _connect() as conn:
         row = conn.execute("SELECT feature_order FROM users WHERE username=?", (username,)).fetchone()

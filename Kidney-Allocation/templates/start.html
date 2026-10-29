@@ -1,44 +1,79 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Organ allocation preference study</h1>
+<h1>The task: who should receive a kidney?</h1>
 <div class="spacer-14"></div>
 
+<h2 class="intro-h">Why this is a hard decision</h2>
 <p>
-  Kidneys for transplant are always scarcer than the patients who need them, so someone has to
-  decide who receives one when it becomes available. This study looks at how people make that
-  kind of call — not to find a "correct" answer, but to see whether we can build a simple AI model
-  (a computer program trained on your choices) that captures the pattern in <em>your</em> choices.
+  Kidney transplantation is the best treatment for many people whose kidneys have failed. But there are far more patients
+  waiting for a kidney than there are kidneys available. So when a kidney becomes available, someone has to decide which
+  patient should receive it — and the patient who does not receive it keeps waiting.
+</p>
+<p>
+  There is no single obviously right answer. Different people care about different things: how long a patient has already
+  waited, how many years of life the transplant would give them, how likely the new kidney is to be rejected, whether other
+  people depend on them, and more. These considerations can point in different directions, and reasonable people weigh them
+  differently. That is what makes this a moral dilemma: any choice favors one patient at the expense of another, and there is
+  no formula that everyone agrees on.
+</p>
+<p>This study is not about finding a “correct” answer. We are interested in <em>your</em> judgment.</p>
+
+<div class="spacer-24"></div>
+<h2 class="intro-h">What you will do</h2>
+<p>
+  You will see pairs of patients who each need a kidney transplant and choose who you think should receive it. A simple AI
+  model — a computer program trained on your choices — will attempt to capture the pattern in your responses to predict your
+  future choices.
+</p>
+<p>You will start with {{ n_pairs }} pairs of patients.</p>
+
+<div class="spacer-24"></div>
+<h2 class="intro-h">How each patient is described</h2>
+<p>Every patient is described by the same {{ features | length }} factors:</p>
+<ul class="feature-defs">
+  {% for p in features %}
+  <li>
+    <strong>{{ feature_labels.get(p, p.replace('_',' ')|title) }}</strong> —
+    <span class="muted">{{ descriptions.get(p, '') }}</span>
+  </li>
+  {% endfor %}
+</ul>
+<p class="muted" style="font-size:13.5px;">
+  On the next screens the factors may be listed in a different order from this page. The order stays the same for you throughout.
 </p>
 
-<div style="height:20px"></div>
+<div class="spacer-24"></div>
+<h2 class="intro-h">What a comparison looks like</h2>
+<p>Here is an example of one pair. It is only an illustration, so you cannot click on it.</p>
 
-<div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px;">
-  <div class="muted" style="font-size:13px; font-weight:600; margin-bottom:10px;">
-    What a comparison looks like
-  </div>
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px; font-size:14px;">
-    <div><strong>Patient A</strong></div>
-    <div><strong>Patient B</strong></div>
-    <div class="muted">3 years waiting · 2 dependents</div>
-    <div class="muted">1 year waiting · 0 dependents</div>
-  </div>
-  <div class="muted" style="font-size:13px; margin-top:10px;">You'll pick which patient should receive the kidney — twenty times in a row.</div>
-</div>
-
-<div style="height:20px"></div>
-
-<details>
-  <summary style="cursor:pointer; font-size:14px; color:var(--text-secondary);">What factors describe each patient?</summary>
-  <div style="height:12px"></div>
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; font-size:14px;">
-    {% for p in features %}
-    <div>
-      <strong>{{ feature_labels.get(p, p.replace('_',' ')|title) }}</strong> —
-      <span class="muted">{{ descriptions.get(p, '') }}</span>
+<div class="example-frame" aria-label="Example of a pairwise comparison">
+  <div class="example-tag">Example</div>
+  <div class="example-title">Which patient should receive the kidney?</div>
+  <div class="scenario-grid">
+    {% for side, label in (('A', 'Patient A'), ('B', 'Patient B')) %}
+    <div class="patient-card {{ side | lower }}">
+      <div class="patient-label {{ side | lower }}">{{ label }}</div>
+      {% for p in features %}
+      <div class="feature-row">
+        <div class="feature-name">{{ feature_labels.get(p, p.replace('_',' ')|title) }}</div>
+        <div class="feature-value">{{ example[side][p] }}{{ value_suffix.get(p, '') }}</div>
+      </div>
+      {% endfor %}
     </div>
     {% endfor %}
   </div>
-</details>
+  <div class="spacer-24"></div>
+  <div class="btn-row example-buttons">
+    <button type="button" class="btn btn-primary btn-block" tabindex="-1" aria-disabled="true">Choose Patient A</button>
+    <button type="button" class="btn btn-primary btn-block" tabindex="-1" aria-disabled="true">Choose Patient B</button>
+  </div>
+</div>
+
+<p style="margin-top:16px;">
+  For every pair you have <strong>two choices</strong>, as shown above: <strong>Choose Patient A</strong> or
+  <strong>Choose Patient B</strong>. Pick the patient you think should receive the kidney. There are no right or wrong
+  answers — choose as you naturally would.
+</p>
 
 <div class="spacer-28"></div>
 
@@ -83,10 +118,22 @@
     </label>
   </div>
   {% endif %}
-  <strong>What should we call you?</strong>
-  <div style="height:8px"></div>
-  <input type="text" name="username" placeholder="Enter your name to begin" autofocus>
+
+  <label for="username"><strong>Your participant ID</strong></label>
+  <div class="muted" style="font-size:13.5px; margin:4px 0 8px;">We have generated an ID for you. You can keep it as it is.</div>
+  <input type="text" name="username" id="username" value="{{ default_name }}" autocomplete="off" spellcheck="false">
   <div class="spacer-16"></div>
-  <button type="submit" class="btn btn-primary btn-block">Start →</button>
+  <button type="submit" class="btn btn-primary btn-block">I am ready to start</button>
 </form>
+
+<style>
+.intro-h { margin: 0 0 10px; }
+.feature-defs { margin: 0 0 12px 22px; padding: 0; line-height: 1.65; }
+.feature-defs li { margin-bottom: 6px; }
+.example-frame { position: relative; border: 2px dashed var(--border-strong, #cbd5e1); border-radius: 16px; padding: 22px 22px 24px; background: #fff; }
+.example-tag { position: absolute; top: -12px; left: 18px; background: #fff; padding: 0 10px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted, #64748b); }
+.example-title { font-size: 1.25rem; font-weight: 600; margin: 0 0 16px; }
+.example-buttons .btn { pointer-events: none; }
+@media (max-width: 640px) { .example-frame .scenario-grid { grid-template-columns: 1fr; } }
+</style>
 {% endblock %}

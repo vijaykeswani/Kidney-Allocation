@@ -21,6 +21,7 @@ After the model picker, routes dispatch to the appropriate section's handlers.
 
 import os
 import random
+import secrets
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -250,22 +251,42 @@ def start():
 
 @app.route("/consent", methods=["POST"])
 def give_consent():
-    age_ok = request.form.get("age_confirmed")
-    consent_ok = request.form.get("consent_confirmed")
-    if age_ok and consent_ok:
-        session.clear()
+    # Consent is given by pressing "Next" on the consent page (see templates/consent.html).
+    session.clear()
     return redirect(url_for("intro", model=_requested_model()))
+
+
+# A made-up pair, shown on the intro page so participants see exactly what a comparison looks like. Values are
+# deliberately a real trade-off (a test checks they are all values the study can actually show).
+EXAMPLE_PAIR = {
+    "A": {"dependents": 2, "years_waiting": 9, "rejection_risk": 10, "life_years_gained": 10, "violent_crimes": 0},
+    "B": {"dependents": 0, "years_waiting": 3, "rejection_risk": 2, "life_years_gained": 25, "violent_crimes": 1},
+}
+_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"        # no 0/O/1/I, which are easy to misread
+
+
+def _new_participant_id():
+    """A random, human-readable ID (e.g. P-7K3Q9X) that nobody has used yet."""
+    pid = None
+    for _ in range(25):
+        pid = "P-" + "".join(secrets.choice(_ID_ALPHABET) for _ in range(6))
+        if not db.user_exists(pid):
+            break
+    return pid
+
+
+def _intro_context(default_name=None, preselected_model=None, error=None):
+    return dict(
+        features=FEATURES, descriptions=PARAM_DESCRIPTIONS, feature_labels=FEATURE_LABELS,
+        value_suffix=features.value_suffixes(), example=EXAMPLE_PAIR, n_pairs=PART1_N,
+        default_name=default_name if default_name is not None else _new_participant_id(),
+        preselected_model=preselected_model, error=error,
+    )
 
 
 @app.route("/intro")
 def intro():
-    return render_template(
-        "start.html",
-        features=FEATURES,
-        descriptions=PARAM_DESCRIPTIONS,
-        feature_labels=FEATURE_LABELS,
-        preselected_model=_requested_model(),
-    )
+    return render_template("start.html", **_intro_context(preselected_model=_requested_model()))
 
 
 @app.route("/start", methods=["POST"])
@@ -275,11 +296,8 @@ def do_start():
     if model_type not in MODEL_TYPES:
         model_type = "fft"
     if len(name) < 2:
-        return render_template(
-            "start.html", features=FEATURES, descriptions=PARAM_DESCRIPTIONS,
-            feature_labels=FEATURE_LABELS, preselected_model=model_type,
-            error="Enter at least 2 characters to continue.",
-        )
+        return render_template("start.html", **_intro_context(
+            default_name=name, preselected_model=model_type, error="Enter at least 2 characters to continue."))
     session["username"] = name
     session["model_type"] = model_type
     db.set_model_type(name, model_type)
