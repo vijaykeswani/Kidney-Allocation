@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block extra_head %}
+{% include "_study_ui_css.html" %}
 <style>
 /* Pinned here rather than relying on base.html's tokens: this page needs
    teal (Patient A) / orange (Patient B) specifically, and that's drifted
@@ -161,16 +162,10 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 </style>
 {% endblock %}
 {% block content %}
-{% if not final_mode %}
-<h2>We’ve built an AI model from your answers so far</h2>
-<p class="muted" style="font-size:15px; line-height:1.6; margin:0 0 18px;">It tries to predict the choices you would make in new cases. Take some time to look it over, and use the controls below to change anything that doesn’t match how you really decide.</p>
-{% endif %}
-<div class="muted" style="font-size:15px; margin:8px 0 18px; line-height:1.6;">
-  Follow the steps below. You can make changes to the model AI learned, as you see fit, to better
-  reflect your decision-making process. The panel below also shows you how your changes impact
-  what choices the model predicts you will make.
-</div>
+{% from "_study_ui.html" import page_header %}
+{% if not final_mode %}{{ page_header(past_scenarios_json | length) }}{% endif %}
 
+{% set match_panel_html %}
 <button class="ts-match-panel" id="ts-match-panel" type="button">
   <div class="ts-match-num" id="ts-match-num">–</div>
   <div class="ts-match-body">
@@ -179,6 +174,8 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
   </div>
   <div class="ts-match-chevron">→</div>
 </button>
+{% endset %}
+{% if final_mode %}{{ match_panel_html }}{% endif %}
 
 {% include "_case_overlay.html" %}
 
@@ -204,6 +201,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
   <div class="ts-summary-label">Your whole model, in plain words</div>
   <div class="ts-summary-text" id="ts-summary-text"></div>
 </div>
+{% if not final_mode %}{{ match_panel_html }}{% endif %}
 
 {% if not final_mode %}
 <div style="display:flex; gap:12px; margin:22px 0;">
@@ -229,6 +227,12 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 <script>
 'use strict';
 var FEATURES_DATA = {{ features_json | tojson }};
+// Model logic ALWAYS uses this fixed order (so a tie in "most important decides" resolves exactly as it does on the server);
+// FEATURES_DATA is only the participant's presentation order.
+var CANON_KEYS = {{ canon_keys | tojson }};
+function flabel(f) { return f.short_label || f.label; }                 // short form for tight spots; the full wording is in the (i) tooltip
+function featOf(key) { return FEATURES_DATA.filter(function(x) { return x.key === key; })[0]; }
+function fmt(key, v) { var f = featOf(key); return (f && f.value_suffix) ? (v + f.value_suffix) : v; }   // e.g. 5 -> 5%
 var FEATURE_RANGES = {{ feature_ranges_json | tojson }};
 var model = {{ model_json | tojson }};
 var pastScenarios = {{ past_scenarios_json | tojson }};
@@ -411,7 +415,7 @@ function condPass(key, patient) {
 function contrib(key, patient) { return condPass(key, patient) ? editValue(key, patient[key]) : 0; }
 
 function predictProb(a, b) {
-  var keys = FEATURES_DATA.map(function(f){ return f.key; });
+  var keys = CANON_KEYS.slice();
   if (model.aggregation === 'tally') {
     var pa = 0, pb = 0;
     keys.forEach(function(k) {
@@ -457,7 +461,7 @@ function cutoffControl(key, st) {
   var vs = valuesOf(key), r = FEATURE_RANGES[key], dis = FINAL_MODE ? ' disabled' : '';
   if (vs) {
     var opts = vs.slice(1).map(function(v) {
-      return '<option value="' + v + '"' + (Number(st.cutoff) === v ? ' selected' : '') + '>' + v + '</option>';
+      return '<option value="' + v + '"' + (Number(st.cutoff) === v ? ' selected' : '') + '>' + fmt(key, v) + '</option>';
     }).join('');
     return '<select class="ts-cutoff" data-cutoff="' + key + '"' + dis + '>' + opts + '</select>';
   }
@@ -491,6 +495,7 @@ function globalMax() {
 // and the previous setting left behind as dashed outlines.
 function drawStrip(key, ghost) {
   var vals = repValues(key);
+  var lastLabelX = -1e9;
   var Ws = 300, Hs = 150, padL = 14, padR = 62, baseY = 62, maxH = 46, labY = 128;
   var n = vals.length, colW = (Ws - padL - padR) / n;
   var st = model.features[key];
@@ -520,7 +525,7 @@ function drawStrip(key, ghost) {
       var gs = editValueFor(ghost.st, key, v), gh = Math.min(maxH, Math.abs(gs) / CHART_MAX * maxH);
       if (gh > 0.5) ghostBars += '<rect x="' + (cx - 10).toFixed(1) + '" y="' + (gs > 0 ? baseY - gh : baseY).toFixed(1) + '" width="20" height="' + gh.toFixed(1) + '" rx="3" class="ts-ghost-bar"/>';
     }
-    body += '<text x="' + cx.toFixed(1) + '" y="' + labY + '" text-anchor="middle" class="ts-axis">' + v + '</text>';
+    if (cx - lastLabelX >= 22) { lastLabelX = cx; body += '<text x="' + cx.toFixed(1) + '" y="' + labY + '" text-anchor="middle" class="ts-axis">' + fmt(key, v) + '</text>'; }
   });
   var overlay = st.matters === 0
     ? '<text x="' + ((padL + Ws - padR) / 2) + '" y="' + (baseY + 20) + '" text-anchor="middle" class="ts-axis" style="font-style:italic">makes no difference</text>'
@@ -542,7 +547,7 @@ function featureSentence(key) {
   if (st.mode === 'anyvsnone') {
     s = (st.cutoff <= (valuesOf(key) ? valuesOf(key)[1] : r.min + 1))
       ? ("Having any " + noun(key) + " at all counts " + side + ".")
-      : ("Reaching " + st.cutoff + " or more " + noun(key) + " counts " + side + ", while less makes no difference.");
+      : ("Reaching " + fmt(key, st.cutoff) + " or more " + noun(key) + " counts " + side + ", while less makes no difference.");
   } else if (st.mode === 'first') {
     s = "More " + noun(key) + " counts " + side + ", and the first bit matters the most.";
   } else if (st.mode === 'last') {
@@ -590,7 +595,7 @@ function explainCase(a, b, userChoice) {
   var rows = FEATURES_DATA.map(function(f) {
     var st = model.features[f.key], on = st.matters > 0;
     var d = contrib(f.key, a) - contrib(f.key, b);
-    return {key: f.key, label: f.label, aVal: a[f.key], bVal: b[f.key], on: on, d: d,
+    return {key: f.key, label: flabel(f), aVal: a[f.key], bVal: b[f.key], on: on, d: d,
             favors: (on && Math.abs(d) > 1e-9) ? (d > 0 ? 'A' : 'B') : null,
             gated: on && !!st.cond.on && (!condPass(f.key, a) || !condPass(f.key, b)), decides: false, unused: false};
   });
@@ -604,7 +609,7 @@ function explainCase(a, b, userChoice) {
     else if (nA === nB) head = 'The same number of factors favor each patient (' + nA + ' each), so the model defaults to Patient B.';
     else head = 'The model picks Patient ' + winner + ': more factors favor ' + winner + ' (' + (winner === 'A' ? nA : nB) + ' vs ' + (winner === 'A' ? nB : nA) + '). It counts factors, not how big each difference is.';
   } else if (agg === 'prominent') {
-    var order = FEATURES_DATA.map(function(f) { return f.key; }).sort(function(x, y) { return ampFor(model.features[y].matters) - ampFor(model.features[x].matters); });
+    var order = CANON_KEYS.slice().sort(function(x, y) { return ampFor(model.features[y].matters) - ampFor(model.features[x].matters); });
     var seen = false;
     order.forEach(function(k) {
       var r = rows.filter(function(q) { return q.key === k; })[0];
@@ -664,7 +669,7 @@ function explainHTML(a, b, userChoice) {
     if (r.gated) note += ' \u00b7 exception: doesn\u2019t count here';
     html += '<div class="why-row' + (r.favors ? '' : ' quiet') + (r.decides ? ' decides' : '') + '">'
       + '<span class="lab">' + esc(r.label) + infoIcon(r.key) + '</span>'
-      + '<span class="vals">A ' + esc(r.aVal) + ' \u00b7 B ' + esc(r.bVal) + '</span>'
+      + '<span class="vals">A ' + esc(fmt(r.key, r.aVal)) + ' \u00b7 B ' + esc(fmt(r.key, r.bVal)) + '</span>'
       + '<span class="why-bar"><span class="h l">' + (r.favors === 'A' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span>'
       + '<span class="h r">' + (r.favors === 'B' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span></span>'
       + '<span class="note">' + esc(note) + '</span></div>';
@@ -685,6 +690,7 @@ window.CaseAdapter = {
   inUse: function(key) { return model.features[key].matters > 0; },
   explain: function(a, b, userChoice) { return explainHTML(a, b, userChoice); },
   infoIcon: infoIcon,
+  fmt: fmt,
   logEvent: logEvent
 };
 document.getElementById('ts-match-panel').addEventListener('click', function() { CaseOverlay.open(); });
@@ -703,9 +709,53 @@ function renderOverview() {
   FEATURES_DATA.forEach(function(f) {
     var st = model.features[f.key];
     var note = st.matters === 0 ? 'no effect' : ((st.dir === 'favor' ? 'helps \u00b7 ' : 'against \u00b7 ') + strengthWordFor(st.matters) + ' (' + st.matters.toFixed(1) + ')');
-    html += '<div class="ts-ov-row"><span>' + esc(f.label) + infoIcon(f.key) + '</span>' + strengthBar(f.key) + '<span class="ts-ov-note">' + note + '</span></div>';
+    html += '<div class="ts-ov-row"><span>' + esc(flabel(f)) + infoIcon(f.key) + '</span>' + strengthBar(f.key) + '<span class="ts-ov-note">' + note + '</span></div>';
   });
   host.innerHTML = html;
+}
+
+// v1 lists factors in the participant's own order on the cards; the plain-words read-out ranks them by weight.
+function orderedFeatures() {
+  return FEATURES_DATA.map(function(x, i) { return {f: x, i: i}; })
+    .sort(function(a, b) { return (ampFor(model.features[b.f.key].matters) - ampFor(model.features[a.f.key].matters)) || (a.i - b.i); })
+    .map(function(x) { return x.f; });
+}
+// ── "Your whole model, in plain words": a short, conversational read-out, strongest factor first ──
+function condPhrase(c) {
+  return c.test === 'zero' ? ('has no ' + noun(c.when)) : c.test === 'nonzero' ? ('has any ' + noun(c.when)) : ('has at least ' + c.n + ' ' + noun(c.when));
+}
+function clauseHTML(key) {
+  var st = model.features[key], r = FEATURE_RANGES[key], n = noun(key);
+  var side = st.dir === 'favor' ? '<b class="favor">in a patient\u2019s favor</b>' : '<b class="against">against a patient</b>';
+  var s;
+  if (st.mode === 'anyvsnone') {
+    s = (st.cutoff <= (valuesOf(key) ? valuesOf(key)[1] : r.min + 1))
+      ? ('having any ' + esc(n) + ' at all works ' + side)
+      : ('once it reaches ' + esc(String(fmt(key, st.cutoff))) + ' or more, ' + esc(n) + ' works ' + side + ', and below that it makes no difference');
+  } else {
+    s = 'more ' + esc(n) + ' works ' + side + (st.mode === 'first' ? ', and the first bit matters most' : st.mode === 'last' ? ', and the last bit matters most' : '');
+  }
+  if (st.cond.on) s += ', but only when the patient ' + esc(condPhrase(st.cond));
+  return s;
+}
+function joinNames(names) { return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]; }
+function plainWordsHTML() {
+  var feats = orderedFeatures();
+  var on = feats.filter(function(f) { return model.features[f.key].matters > 0; });
+  var off = feats.filter(function(f) { return model.features[f.key].matters === 0; });
+  if (!on.length) return 'Right now the model isn\u2019t using any of the factors, so it has nothing to go on and will simply default to Patient B. Switch some factors on in Step 1 to teach it how you decide.';
+  var agg = model.aggregation, ranked = agg !== 'tally';
+  var out = [agg === 'tally' ? 'When you choose between two patients, the model thinks you count how many factors favor each of them, and go with whoever has more.'
+           : agg === 'prominent' ? 'When you choose between two patients, the model thinks you look at the most important factor that differs between them, and let that one decide.'
+           : 'When you choose between two patients, the model thinks you weigh all the factors against each other, and go with whoever comes out ahead overall.'];
+  on.forEach(function(f, i) {
+    var name = '<b>' + esc(flabel(f)) + '</b>';
+    var lead = ranked ? (i === 0 ? 'The factor that matters most to you is ' : i === 1 ? 'Next comes ' : i === 2 ? 'After that, ' : 'Then ') + name
+                      : (i === 0 ? 'You look at ' : 'You also look at ') + name;
+    out.push(lead + (ranked ? ' (it counts ' + strengthWordFor(model.features[f.key].matters) + ')' : '') + ': ' + clauseHTML(f.key) + '.');
+  });
+  if (off.length) out.push('You don\u2019t seem to take ' + esc(joinNames(off.map(function(f) { return flabel(f).toLowerCase(); }))) + ' into account.');
+  return out.join(' ');
 }
 
 function renderSummary() {
@@ -722,9 +772,7 @@ function renderSummary() {
     subEl.textContent = 'Tap to see how it does case by case, or try your own.';
   }
 
-  var lines = FEATURES_DATA.map(function(f) { return featureSentence(f.key); });
-  lines.push(aggSentence(model.aggregation));
-  document.getElementById('ts-summary-text').innerHTML = lines.map(colorize).join(' ');
+  document.getElementById('ts-summary-text').innerHTML = plainWordsHTML();
   if (FINAL_MODE) renderFinalHeader(n, current);
 }
 
@@ -740,7 +788,7 @@ function renderFeatures() {
 
     var badgeCls = st.matters === 0 ? 'none' : st.dir;
     var badgeTxt = st.matters === 0 ? 'No effect' : (st.dir === 'favor' ? '\u2191 Helps them' : '\u2193 Counts against a patient');
-    var html = '<div class="ts-fhead"><div class="ts-fname">' + esc(f.label) + infoIcon(f.key) + '</div>'
+    var html = '<div class="ts-fhead"><div class="ts-fname">' + esc(flabel(f)) + infoIcon(f.key) + '</div>'
       + '<div class="ts-badge ' + badgeCls + '">' + badgeTxt + '</div></div>';
     html += '<div class="ts-fdesc" id="ts-desc-' + f.key + '">' + esc(featureSentence(f.key)) + '</div>';
     var ghostNow = (tsGhost && tsGhost.key === f.key) ? tsGhost : null;

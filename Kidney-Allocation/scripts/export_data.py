@@ -49,6 +49,7 @@ def export_participant_summary(conn, out_dir: str, stamp: str) -> str:
             "username": u["username"],
             "model_type": get("model_type"),
             "display_model_type": get("display_model_type"),
+            "feature_order": " > ".join(json.loads(get("feature_order"))) if get("feature_order") else None,
             "arm": frozen.get("arm"),
             "alignment_score": get("alignment_score"),
             "model_edited": frozen.get("edited"),
@@ -78,7 +79,7 @@ def export_participant_summary(conn, out_dir: str, stamp: str) -> str:
                 row[f"survey_{k}"] = v; survey_cols.append(f"survey_{k}")
         rows.append(row)
 
-    base_cols = list(rows[0].keys())[:22] if rows else []
+    base_cols = [k for k in rows[0] if not k.startswith("survey_")] if rows else []
     cols = base_cols + sorted(set(survey_cols))
     out_path = os.path.join(out_dir, f"participant_summary_{stamp}.csv")
     with open(out_path, "w", newline="", encoding="utf-8") as f:

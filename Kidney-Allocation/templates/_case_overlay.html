@@ -112,6 +112,8 @@ var CaseOverlay = (function() {
   'use strict';
   var idx = 0, whyOpen = false, builderVals = null, customTimer = null;
   function A() { return window.CaseAdapter; }
+  function featureList() { var x = A().features; return typeof x === 'function' ? x() : x; }   // a page may list factors in its own order
+  function fv(key, v) { return A().fmt ? A().fmt(key, v) : v; }                                  // values as participants saw them (e.g. 5%)
   function $(id) { return document.getElementById(id); }
   function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
 
@@ -138,8 +140,8 @@ var CaseOverlay = (function() {
   }
 
   function rows(patient) {
-    return A().features.map(function(f) {
-      return '<div class="co-prow ' + (A().inUse(f.key) ? 'on' : 'off') + '"><span>' + esc(f.label) + A().infoIcon(f.key) + '</span><span>' + esc(patient[f.key]) + '</span></div>';
+    return featureList().map(function(f) {
+      return '<div class="co-prow ' + (A().inUse(f.key) ? 'on' : 'off') + '"><span>' + esc(f.label) + A().infoIcon(f.key) + '</span><span>' + esc(fv(f.key, patient[f.key])) + '</span></div>';
     }).join('');
   }
 
@@ -189,7 +191,7 @@ var CaseOverlay = (function() {
 
   // ---- "Try your own case"
   function renderBuilder() {
-    var feats = A().features;
+    var feats = featureList();
     if (!builderVals) {
       builderVals = {A: {}, B: {}};
       feats.forEach(function(f) {
@@ -203,7 +205,7 @@ var CaseOverlay = (function() {
       feats.forEach(function(f) {
         var r = A().ranges[f.key], vs = A().valuesOf(f.key);
         html += '<div class="co-slider"><div class="co-slider-head"><span>' + esc(f.label) + A().infoIcon(f.key) + '</span>'
-          + '<span id="co-b-' + side + '-' + f.key + '" style="font-weight:600;">' + esc(builderVals[side][f.key]) + '</span></div>'
+          + '<span id="co-b-' + side + '-' + f.key + '" style="font-weight:600;">' + esc(fv(f.key, builderVals[side][f.key])) + '</span></div>'
           + (vs ? '<input type="range" min="0" max="' + (vs.length - 1) + '" step="1" value="' + Math.max(0, vs.indexOf(builderVals[side][f.key])) + '" data-idx="1" '
                 : '<input type="range" min="' + r.min + '" max="' + r.max + '" value="' + builderVals[side][f.key] + '" ')
           + 'data-side="' + side + '" data-key="' + f.key + '"></div>';
@@ -216,7 +218,7 @@ var CaseOverlay = (function() {
       inp.addEventListener('input', function() {
         var side = inp.getAttribute('data-side'), key = inp.getAttribute('data-key');
         var v = inp.hasAttribute('data-idx') ? A().valuesOf(key)[parseInt(inp.value, 10)] : parseInt(inp.value, 10);
-        builderVals[side][key] = v; $('co-b-' + side + '-' + key).textContent = v;
+        builderVals[side][key] = v; $('co-b-' + side + '-' + key).textContent = fv(key, v);
         renderVerdict(); logCustomSoon();
       });
     });

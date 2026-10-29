@@ -12,6 +12,7 @@ from datetime import datetime
 from flask import render_template, session, url_for
 
 import db
+import feature_order
 import features
 import survey_spec as survey_spec_module
 from decision_tree import tiebreaker
@@ -158,13 +159,14 @@ def results_view():
         current_score=rec.get("alignment_score"),
         has_override=bool(override),
         tree_json=stats["tree"],
-        params_json=[f"{p}_diff" for p in FEATURES],
+        params_json=[f"{p}_diff" for p in feature_order.for_user(username)],
         labels_json=PARAM_DIRECTION_LABELS,
         node_explanations_json=stats.get("node_explanations") or [],
         summary_explanation_json=stats.get("summary_explanation") or "",
         past_scenarios_json=_scenarios_for_audit(decisions),
         feature_ranges_json=_feature_ranges(),
-        features_json=features.FEATURES_DATA,
+        features_json=features.ordered_data(feature_order.for_user(username)),
+        canon_keys=features.FEATURE_KEYS,
         model_version=version,
         trial_count=len(db.list_trials(username, model_version=version)),
         tutorial_mode=tutorial_mode,
@@ -256,13 +258,14 @@ def final_view():
         current_score=None,
         has_override=False,
         tree_json=stats["tree"],
-        params_json=[f"{p}_diff" for p in FEATURES],
+        params_json=[f"{p}_diff" for p in feature_order.for_user(username)],
         labels_json=PARAM_DIRECTION_LABELS,
         node_explanations_json=stats.get("node_explanations") or [],
         summary_explanation_json=stats.get("summary_explanation") or "",
         past_scenarios_json=_scenarios_for_audit(part2),
         feature_ranges_json=_feature_ranges(),
-        features_json=features.FEATURES_DATA,
+        features_json=features.ordered_data(feature_order.for_user(username)),
+        canon_keys=features.FEATURE_KEYS,
         model_version=0, trial_count=0,
         tutorial_mode="",
         max_new_features=MAX_NEW_FEATURES,
@@ -314,7 +317,7 @@ def review_view():
     return render_template(
         "review.html",
         groups=groups,
-        features=FEATURES,
+        features=feature_order.for_user(username),
         feature_labels={k: v["label"] for k, v in features.FEATURE_BY_KEY.items()},
         back_url=url_for("results"),
         new_scenario_url=url_for("new_scenario"),

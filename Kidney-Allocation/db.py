@@ -198,6 +198,9 @@ _ADDED_USER_COLUMNS = [
     # their edited model (treatment arms) or the unedited Part-1 model (control).
     # Part 2 then tests THIS model on fresh answers; it is never retrained.
     ("frozen_model_json",   "TEXT"),
+    # The order this participant sees the factors in, for the whole study (JSON list of feature keys).
+    # Counterbalanced across participants — see feature_order.py.
+    ("feature_order",       "TEXT"),
 ]
 
 
@@ -396,6 +399,34 @@ def get_fft_override(username):
 def delete_fft_override(username):
     with _connect() as conn:
         conn.execute("UPDATE users SET fft_override=NULL WHERE username=?", (username,))
+
+
+def get_feature_order(username):
+    with _connect() as conn:
+        row = conn.execute("SELECT feature_order FROM users WHERE username=?", (username,)).fetchone()
+    return json.loads(row["feature_order"]) if row and row["feature_order"] else None
+
+
+def assign_feature_order(username, chooser):
+    """
+    Give this participant a feature order chosen by `chooser(existing_orders)`, unless they already have one.
+    Done inside one write transaction so two participants signing up at the same moment can't both be handed
+    the same "least used" order.
+    """
+    with _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT feature_order FROM users WHERE username=?", (username,)).fetchone()
+        if row and row["feature_order"]:
+            return json.loads(row["feature_order"])
+        existing = [json.loads(r["feature_order"]) for r in
+                    conn.execute("SELECT feature_order FROM users WHERE feature_order IS NOT NULL")]
+        order = list(chooser(existing))
+        conn.execute(
+            "INSERT INTO users (username, feature_order) VALUES (?, ?) "
+            "ON CONFLICT(username) DO UPDATE SET feature_order = excluded.feature_order",
+            (username, json.dumps(order)),
+        )
+    return order
 
 
 def set_frozen_model(username, frozen):

@@ -6,10 +6,11 @@
     {% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue %}
 #}
 {# The heading for the view/edit phase (not shown on the final page). #}
-{% macro page_header() -%}
+{% macro page_header(n_cases) -%}
 <div class="study-header study-ui">
-  <h2 class="study-h">We’ve built an AI model from your answers so far</h2>
-  <p class="study-sub">It tries to predict the choices you would make in new cases. Take some time to look it over, and use the controls below to change anything that doesn’t match how you really decide.</p>
+  <h2 class="study-h">We’ve built an AI model from your answers so far.</h2>
+  <p class="study-sub">The model’s goal is to predict the choices you would make in the future, by judging who should get a kidney the same way you would. Follow the steps below to see how it makes its predictions, and use the controls to change anything that doesn’t match how you decide.</p>
+  <p class="study-sub">At the bottom, you will be able to see how your suggested updates would change the model’s predictions on the {{ n_cases }} cases you already provided your answers for. You can also see what the model would predict you would say in new cases you design on your own. Use these panels to determine whether you want to make any further modifications to the model to make it better reflect your decision-making process. When you are satisfied with how well the model reflects your thinking, click “Lock in my model and continue”.</p>
 </div>
 {%- endmacro %}
 
@@ -25,15 +26,15 @@
 {%- endmacro %}
 
 {# a collapsible step: one-line overview first, click to expand. The body is whatever the calling page passes in. #}
-{% macro step(n, title) -%}
-<button class="ts-step-card study-ui" id="ts-step{{ n }}-toggle" type="button">
+{% macro step(n, title, open=False) -%}
+<button class="ts-step-card study-ui{{ ' open' if open }}" id="ts-step{{ n }}-toggle" type="button">
   <div class="ts-step-card-head">
     <div class="ts-step-title">{{ title }}</div>
     <div class="ts-step-preview" id="ts-step{{ n }}-preview"></div>
   </div>
-  <div class="ts-step-chevron" id="ts-step{{ n }}-chevron">▾</div>
+  <div class="ts-step-chevron{{ ' open' if open }}" id="ts-step{{ n }}-chevron"><span class="show">Show ▾</span><span class="hide">Hide ▴</span></div>
 </button>
-<div class="ts-step-body" id="ts-step{{ n }}-body">{{ caller() }}</div>
+<div class="ts-step-body{{ ' open' if open }}" id="ts-step{{ n }}-body">{{ caller() }}</div>
 {%- endmacro %}
 
 {% macro summary_card() -%}

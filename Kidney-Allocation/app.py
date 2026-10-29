@@ -32,6 +32,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 import db
 import features
 import survey_spec
+import feature_order
 import decision_tree
 import feature_list
 import decision_tree.handlers as dt_handlers
@@ -209,6 +210,13 @@ def _model_locked():
     return bool(db.get_frozen_model(session["username"]))
 
 
+def _feature_order():
+    """This participant's factor order (same on every scenario and page); assigned if they somehow don't have one yet."""
+    if "feature_order" not in session:
+        session["feature_order"] = feature_order.for_user(session["username"])
+    return session["feature_order"]
+
+
 def _require_user():
     if "username" not in session:
         return redirect(url_for("intro"))
@@ -275,6 +283,8 @@ def do_start():
     session["username"] = name
     session["model_type"] = model_type
     db.set_model_type(name, model_type)
+    # One counterbalanced factor order for this participant, used everywhere they see the factors.
+    session["feature_order"] = feature_order.for_user(name)
 
     if model_type == "control":
         # Control never interacts with a model mid-study, but under the
@@ -323,7 +333,7 @@ def questionnaire(part):
         # DISPLAYABLE_MODEL_TYPES / _display_model_type()).
         return redirect(url_for("final"))
 
-    heading = "Which patient should receive the organ?" if part == 1 else "Part 2: A few more scenarios"
+    heading = "Which patient should receive the kidney?"
     if part == 1:
         subheading = None
     elif is_control:
@@ -336,8 +346,8 @@ def questionnaire(part):
     return render_template(
         "questionnaire.html",
         part=part, idx=idx, n_total=n_total,
-        sc=scenarios[idx], features=FEATURES,
-        feature_labels=FEATURE_LABELS, descriptions=PARAM_DESCRIPTIONS,
+        sc=scenarios[idx], features=_feature_order(),
+        feature_labels=FEATURE_LABELS, descriptions=PARAM_DESCRIPTIONS, value_suffix=features.value_suffixes(),
         heading=heading, subheading=subheading,
     )
 

@@ -1,10 +1,10 @@
 {
-  "_comment": "Single source of truth for every feature used in the study. To swap in a different set of features later, edit this file only \u2014 app.py, fft_model.py, fft_component.py and model.html all read their feature-specific data from here rather than hardcoding it. Order here is the order features appear everywhere (dropdowns, patient cards, etc). 'direction_prior' (optional, 'favor'|'against'): the trainer assumes this direction instead of inferring it from ~20 noisy answers; participants can still change it when editing.",
+  "_comment": "Single source of truth for every feature used in the study. To swap in a different set of features later, edit this file only — app.py, fft_model.py, fft_component.py and model.html all read their feature-specific data from here rather than hardcoding it. Order here is the order features appear everywhere (dropdowns, patient cards, etc). 'direction_prior' (optional, 'favor'|'against'): the trainer assumes this direction instead of inferring it from ~20 noisy answers; participants can still change it when editing. Optional per-feature fields: 'short_label' (used where space is tight), 'value_suffix' (e.g. '%' shown after values), 'direction_prior'.",
   "features": [
     {
       "key": "dependents",
       "label": "Dependents",
-      "description": "Number of people who depend on this patient (family, caregivers).",
+      "description": "Number of people who financially depend on this patient (such as children or elderly family members).",
       "min": 0,
       "max": 3,
       "unit": "",
@@ -22,12 +22,12 @@
     },
     {
       "key": "years_waiting",
-      "label": "Years Waiting",
+      "label": "Years on the waitlist",
       "description": "How long the patient has been on the transplant waiting list.",
       "min": 1,
       "max": 9,
       "unit": "years",
-      "gap_phrase": "waiting time gap",
+      "gap_phrase": "waitlist time gap",
       "direction_higher": "Choose patient waiting longer",
       "direction_lower": "Choose patient waiting shorter",
       "direction_higher_short": "Longer wait",
@@ -43,23 +43,26 @@
     },
     {
       "key": "rejection_risk",
-      "label": "Rejection Risk",
-      "description": "Estimated chance of the immune system rejecting the kidney (1 = very low, 15 = very high; takes values 1, 2, 5, 10, or 15).",
+      "label": "Transplantation rejection risk",
+      "description": "Percent chance that the patient’s immune system will reject the transplanted kidney in the next year.",
       "min": 1,
-      "max": 15,
+      "max": 20,
       "values": [
         1,
         2,
+        3,
         5,
         10,
-        15
+        15,
+        20
       ],
-      "unit": "points",
+      "unit": "percentage points",
       "gap_phrase": "rejection risk gap",
       "direction_higher": "Choose patient with higher rejection risk",
       "direction_lower": "Choose patient with lower rejection risk",
       "direction_higher_short": "Higher risk",
-      "direction_lower_short": "Lower risk"
+      "direction_lower_short": "Lower risk",
+      "value_suffix": "%"
     },
     {
       "key": "life_years_gained",
@@ -85,11 +88,11 @@
     {
       "key": "violent_crimes",
       "label": "Past Violent Crimes",
-      "description": "Number of past violent criminal convictions on record.",
+      "description": "Number of past violent crimes the patient has been convicted of.",
       "min": 0,
       "max": 2,
       "unit": "",
-      "gap_phrase": "criminal record gap",
+      "gap_phrase": "violent crimes gap",
       "direction_higher": "Choose patient with more past violent crimes",
       "direction_lower": "Choose patient with fewer past violent crimes",
       "direction_higher_short": "More crimes",

@@ -74,3 +74,20 @@ def value_steps():
             g = gcd(g, int(b - a))
         out[k] = g if g > 0 else 1
     return out
+
+def ordered_data(order):
+    """FEATURES_DATA entries in a participant's presentation order (any key not in `order` goes last)."""
+    keys = [k for k in (order or []) if k in FEATURE_BY_KEY]
+    keys += [k for k in FEATURE_KEYS if k not in keys]
+    return [FEATURE_BY_KEY[k] for k in keys]
+
+
+def value_suffixes():
+    """key -> text shown after a value (e.g. "%" for a chance), only for features that have one."""
+    return {k: v["value_suffix"] for k, v in FEATURE_BY_KEY.items() if v.get("value_suffix")}
+
+
+def fmt_value(key, v):
+    """A value as participants see it: whole numbers, plus the feature's suffix if it has one."""
+    v = float(v)
+    return (str(int(v)) if v == int(v) else str(v)) + FEATURE_BY_KEY[key].get("value_suffix", "")

@@ -6,6 +6,7 @@ app.py dispatches to these functions after handling auth and shared setup.
 Functions call db.* and features.* directly to avoid circular imports.
 """
 
+import feature_order
 import features
 from datetime import datetime
 
@@ -93,7 +94,8 @@ def results_view(template="twostage.html"):
         summary_text=stats["summary"],
         past_scenarios_json=_scenarios_for_audit(decisions),
         feature_ranges_json=_feature_ranges(),
-        features_json=features.FEATURES_DATA,
+        features_json=features.ordered_data(feature_order.for_user(username)),
+        canon_keys=features.FEATURE_KEYS,
         tutorial_mode=tutorial_mode,
     )
 
@@ -165,7 +167,8 @@ def final_view(template="twostage.html"):
         summary_text=twostage_model.summary_text(model),
         past_scenarios_json=_scenarios_for_audit(part2),
         feature_ranges_json=_feature_ranges(),
-        features_json=features.FEATURES_DATA,
+        features_json=features.ordered_data(feature_order.for_user(username)),
+        canon_keys=features.FEATURE_KEYS,
         tutorial_mode="",
     )
 

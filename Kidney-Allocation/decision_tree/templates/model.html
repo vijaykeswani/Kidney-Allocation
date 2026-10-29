@@ -752,8 +752,7 @@ body { background: #fff; }
 <body>
 
 <div class="page-wrap">
-  {% if not final_mode %}{{ page_header() }}{% endif %}
-{{ match_panel() }}
+  {% if not final_mode %}{{ page_header(past_scenarios_json | length) }}{% else %}{{ match_panel() }}{% endif %}
   {% include "_case_overlay.html" %}
   {% include "_study_flow.html" %}
 
@@ -764,7 +763,7 @@ body { background: #fff; }
     <button type="button" id="btn-help"></button>
   </div>
 
-  {% call step(1, "Step 1. The checks the AI applies, in order") %}
+  {% call step(1, "Step 1. The checks the AI applies, in order", open=True) %}
   <div class="ts-step-sub">The AI goes through these checks from top to bottom, and the first one that applies decides the case. {% if not final_mode %}Click any check to change it, or add a new one.{% endif %}</div>
   {% if not final_mode %}<div class="ts-legend">✎ click a check to edit it &nbsp;·&nbsp; ▲▼ move it up or down &nbsp;·&nbsp; dashed outline = you can click it</div>{% endif %}
   <div class="tree-card">
@@ -902,6 +901,7 @@ body { background: #fff; }
 
   {{ summary_card() }}
   {% if not final_mode %}
+  {{ match_panel() }}
   {{ actions(has_override) }}
   {{ rating() }}
   {{ lock_in() }}
@@ -1155,7 +1155,7 @@ function refineOutcomeLabel(r, isTrueBranch) {
 function pretty(f) {
   var base = f.endsWith('_diff') ? f.slice(0,-5) : f;
   var entry = FEATURE_BY_KEY[base];
-  if (entry) return entry.label;
+  if (entry) return entry.short_label || entry.label;
   return base.replace(/_/g,' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
 }
 // Label used specifically in the "Factor" dropdowns — every value here is a
@@ -2176,6 +2176,7 @@ editing = !FINAL_MODE;              // read-only on the final page, exactly like
 var INITIAL_TREE_JSON = null;      // snapshot once loaded, to know whether there are unsaved edits
 
 function commitOpenPanels() { savePanel(); saveLeafPanel(); saveRefinePanel(); saveDefaultPanel(); }
+function fmtv(key, v) { var f = FEATURE_BY_KEY[key]; return (f && f.value_suffix) ? v + f.value_suffix : v; }   // e.g. 5 -> 5%
 function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
 
 function updateMatchCount() {      // the shared match panel: same ids and wording as the feature-list page
@@ -2190,14 +2191,16 @@ function updateMatchCount() {      // the shared match panel: same ids and wordi
 }
 function treePlainWords() {
   var nodes = (tree && tree.nodes) || [], dflt = (tree && tree.default_class === 1) ? 'A' : 'B';
-  var out = nodes.map(function(nd, i) {
+  if (!nodes.length) return 'There are no checks yet, so the model just picks Patient ' + dflt + ' every time. Add a check to teach it how you decide.';
+  var out = ['When you choose between two patients, the model thinks you go through a few checks one at a time, and the first check that settles it decides.'];
+  nodes.forEach(function(nd, i) {
     var e = nodeExplanations[i] || {};
-    var s = (e.explanation || '') + ' If so: ' + lowerFirst(outcomeLabel(nd, false)) + '.';
-    if (e.refine_explanation) s += ' ' + e.refine_explanation;
-    return s;
+    var s = (e.explanation || '').replace(/^You first check/, 'First, the model checks').replace(/^Next, you check/, 'If that doesn\u2019t settle it, it checks');
+    s += ' If so, it will ' + lowerFirst(outcomeLabel(nd, false)).replace(/^choose patient/, 'choose the patient') + '.';
+    if (e.refine_explanation) s += ' ' + e.refine_explanation.replace(/you then check/, 'the model then checks');
+    out.push(s);
   });
-  out.push(nodes.length ? 'If none of these checks applies, the model falls back to Patient ' + dflt + '.'
-                        : 'There are no checks yet, so the model just picks Patient ' + dflt + '.');
+  out.push('If none of the checks settles it, the model goes with Patient ' + dflt + '.');
   return out.join(' ');
 }
 function onTreeChanged() {          // runs after every redraw, so everything stays in step with the edits
@@ -2219,6 +2222,7 @@ window.CaseAdapter = {
   inUse: function(key) { return ((tree && tree.nodes) || []).some(function(n) { return n.feature === key + '_diff' || (n.refine && n.refine.feature === key + '_diff'); }); },
   explain: function(a, b, userChoice) { return explainTreeHTML(explainTreeCase(a, b, userChoice, FINAL_MODE)); },
   infoIcon: infoIcon,
+  fmt: fmtv,
   logEvent: logEvent
 };
 document.getElementById('ts-match-panel').addEventListener('click', function() { CaseOverlay.open(); });
@@ -2244,8 +2248,6 @@ StudyFlow.steps(function(n) {
     }
   }
 });
-// Auto-expand Step 1 on page load so the tree is immediately visible
-if (!FINAL_MODE) StudyFlow.toggleStep(1, function() { zoom = 1; render(); fitZoom(true); });
 if (!FINAL_MODE) StudyFlow.init({
   applyUrl: APPLY_URL, resetUrl: RESET_URL, rateUrl: RATE_URL, continueUrl: CONTINUE_URL, currentScore: currentScore,
   beforeApply: commitOpenPanels,
@@ -2345,7 +2347,7 @@ function explainTreeCase(a, b, userChoice, isFinal) {
     } else {
       cls = ((x > 0) === nd.prefer_higher) ? 1 : 0;
       var W2 = cls === 1 ? 'A' : 'B';
-      steps.push({n: n, applies: true, text: 'Step ' + n + ': the ' + gap + ' is ' + ax + _unitStr(ax, unit) + ' (Patient A ' + _rnd(a[base]) + ', Patient B ' + _rnd(b[base]) + '); this step needs '
+      steps.push({n: n, applies: true, text: 'Step ' + n + ': the ' + gap + ' is ' + ax + _unitStr(ax, unit) + ' (Patient A ' + fmtv(base, _rnd(a[base])) + ', Patient B ' + fmtv(base, _rnd(b[base])) + '); this step needs '
         + _thrWithUnit(thr, unit, nd.op || '>=') + ', so it applies. Rule: ' + _outcomeLower(nd) + ' \u2192 Patient ' + W2 + '.'});
     }
     break;
@@ -2708,8 +2710,6 @@ initEditor(
   {{ node_explanations_json | tojson }},
   {{ summary_explanation_json | tojson }}
 );
-if (FINAL_MODE) StudyFlow.toggleStep(1, function() { zoom = 1; render(); fitZoom(true); });   // the final page opens with the model showing
-
 // Pulse the Step 1 header on load to signal it's interactive (fires once, removed after)
 (function() {
   var card = document.getElementById('ts-step1-toggle');

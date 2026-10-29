@@ -229,7 +229,7 @@ def _curve_to_params(key, curve, polarity):
             cutoff = float(levels[(edges[j] + edges[j + 1] + 1) // 2])
         else:
             # Judge the shape from slopes (score per unit of the feature), not raw increments:
-            # levels are not evenly spaced (e.g. rejection risk 1,2,5,10,15), and a steady
+            # levels are not evenly spaced (e.g. rejection chance 1,2,3,5,10,15,20), and a steady
             # rule means equal slopes.
             gaps = np.diff(levels[edges])
             slopes = inc / np.where(gaps > 0, gaps, 1.0)
@@ -406,7 +406,7 @@ def feature_sentence(model, key):
         if st["cutoff"] <= (_levels(key)[1] if len(_levels(key)) > 1 else _levels(key)[0]):
             s = f"Having any {noun} at all counts {side}."
         else:
-            s = f"Reaching {_fmt_num(st['cutoff'])} or more {noun} counts {side}, while less makes no difference."
+            s = f"Reaching {features.fmt_value(key, st['cutoff'])} or more {noun} counts {side}, while less makes no difference."
     elif st["mode"] == "first":
         s = f"More {noun} counts {side}, and the first bit matters the most."
     elif st["mode"] == "last":

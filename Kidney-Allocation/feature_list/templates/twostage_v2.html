@@ -109,18 +109,6 @@ select.ts-cutoff { width: auto; min-width: 70px; }
 .ts-feat-item-tag.none { background: var(--surface); color: var(--text-muted); }
 
 
-.ts-advanced-toggle {
-  font-size: 12.5px; color: var(--text-muted); background: none; border: none;
-  cursor: pointer; font-family: inherit; padding: 4px 0; margin-bottom: 4px;
-  display: inline-flex; align-items: center; gap: 5px;
-}
-
-.ts-advanced-toggle:hover { color: var(--text); }
-
-.ts-advanced-body { display: none; }
-
-.ts-advanced-body.open { display: block; }
-
 
 .ts-v2-pane .ts-card { margin: 0; border: 1px solid var(--border); padding: 20px 22px; border-radius: 12px; background: #fff; }
 
@@ -235,18 +223,36 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 .ts-agg-text { flex: 1; }
 .ts-agg-ico { flex-shrink: 0; display: block; }
 .ts-strength-slider-row { align-items: center; gap: 12px; margin-top: -2px; }
+.ts-ov-row.clickable { cursor: pointer; border-radius: 6px; padding-left: 4px; padding-right: 4px; margin: 0 -4px; }
+.ts-ov-row.clickable:hover, .ts-ov-row.clickable:focus { background: var(--surface); outline: none; }
+#ts-overview .ts-overview-title { font-size: 14.5px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.ts-overview-sub { font-weight: 400; font-size: 12.5px; color: var(--text-muted); }
+/* feature list: names, (i) icons and tags line up in clean columns */
+.ts-v2-layout { grid-template-columns: 240px 1fr; gap: 24px; }
+.ts-feat-item { display: block; }
+.ts-feat-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.ts-feat-meta .ts-mini { flex: 1; margin: 0; }
+.ts-feat-item-name { line-height: 1.35; }
+.nb { white-space: nowrap; }
+.ts-feat-item-tag { min-width: 64px; text-align: center; }
+.ts-ov-row { grid-template-columns: 215px 1fr 150px; }
+/* shape buttons: always shown, a bit smaller */
+.ts-shape-row { flex-direction: column; align-items: stretch; gap: 6px; }
+.ts-shape-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ts-shape-btns .ts-btn.has-ico { padding: 5px 9px; font-size: 12px; min-height: 0; gap: 2px; }
+.ts-shape-btns .ts-shape-ico { width: 30px; height: 12px; }
 </style>
 {% endblock %}
 {% block content %}
 {% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue %}
 
-{% if not final_mode %}{{ page_header() }}{% endif %}
-{{ match_panel() }}
+{% if not final_mode %}{{ page_header(past_scenarios_json | length) }}{% else %}{{ match_panel() }}{% endif %}
+<div class="ts-overview" id="ts-overview"></div>
 
 {% include "_case_overlay.html" %}
 {% include "_study_flow.html" %}
 
-{% call step(1, "Step 1. Which factors matter — and how much") %}
+{% call step(1, "Step 1. Which factors matter — and how much", open=True) %}
   <div class="ts-step-sub">
     Select a factor on the left to see how the model treats it. {% if not final_mode %}Use the buttons to correct it if needed.{% endif %}
   </div>
@@ -270,6 +276,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 {{ summary_card() }}
 
 {% if not final_mode %}
+{{ match_panel() }}
 {{ actions(has_override) }}
 {{ rating() }}
 {{ lock_in() }}
@@ -346,6 +353,19 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 <script>
 'use strict';
 var FEATURES_DATA = {{ features_json | tojson }};
+// Model logic ALWAYS uses this fixed order (so a tie in "most important decides" resolves exactly as it does on the server);
+// FEATURES_DATA is only the participant's presentation order.
+var CANON_KEYS = {{ canon_keys | tojson }};
+// A factor's name with its (i) icon glued to the last word, so the icon never wraps onto a line of its own.
+function labelHTML(f) {
+  var t = f.short_label || f.label, i = t.lastIndexOf(' ');
+  return i < 0 ? '<span class="nb">' + esc(t) + infoIcon(f.key) + '</span>' : esc(t.slice(0, i)) + ' <span class="nb">' + esc(t.slice(i + 1)) + infoIcon(f.key) + '</span>';
+}
+function flabel(f) { return f.short_label || f.label; }                 // short form for tight spots; the full wording is in the (i) tooltip
+function featOf(key) { return FEATURES_DATA.filter(function(x) { return x.key === key; })[0]; }
+// Axis ticks: bare numbers, with the unit only on the last one (so 1, 2, 3, 5, 10, 15, 20%) — keeps close values on one line.
+function axisLab(key, v, last) { var f = featOf(key); return (f && f.value_suffix && !last) ? v : fmt(key, v); }
+function fmt(key, v) { var f = featOf(key); return (f && f.value_suffix) ? (v + f.value_suffix) : v; }   // e.g. 5 -> 5%
 var FEATURE_RANGES = {{ feature_ranges_json | tojson }};
 var model = {{ model_json | tojson }};
 var pastScenarios = {{ past_scenarios_json | tojson }};
@@ -461,6 +481,8 @@ function sliderEdit(key, value) {
 function sliderDone(key) {
   if (tsDrag && tsDrag.key === key) { logEvent('model_edit', editDetail(key, {via: 'slider'})); tsGhost = {key: key, st: tsDrag.st}; tsDrag = null; refresh(); }
 }
+// After a slider is released, re-sort every list by the new weights (they were held still while dragging).
+function resort() { tsOrderCache = null; renderOverview(); renderFeatList(); renderSummary(); }
 function softRefresh(key) {
   var st = model.features[key];
   var chart = document.getElementById('ts-chart-' + key);
@@ -523,7 +545,7 @@ function condPass(key, patient) {
 function contrib(key, patient) { return condPass(key, patient) ? editValue(key, patient[key]) : 0; }
 
 function predictProb(a, b) {
-  var keys = FEATURES_DATA.map(function(f){ return f.key; });
+  var keys = CANON_KEYS.slice();
   if (model.aggregation === 'tally') {
     var pa = 0, pb = 0;
     keys.forEach(function(k) {
@@ -569,7 +591,7 @@ function cutoffControl(key, st) {
   var vs = valuesOf(key), r = FEATURE_RANGES[key], dis = FINAL_MODE ? ' disabled' : '';
   if (vs) {
     var opts = vs.slice(1).map(function(v) {
-      return '<option value="' + v + '"' + (Number(st.cutoff) === v ? ' selected' : '') + '>' + v + '</option>';
+      return '<option value="' + v + '"' + (Number(st.cutoff) === v ? ' selected' : '') + '>' + fmt(key, v) + '</option>';
     }).join('');
     return '<select class="ts-cutoff" data-cutoff="' + key + '"' + dis + '>' + opts + '</select>';
   }
@@ -616,7 +638,7 @@ function drawStrip(key, gmax) {
     } else {
       body += '<rect x="' + (cx - 10).toFixed(1) + '" y="' + baseY.toFixed(1) + '" width="20" height="' + h.toFixed(1) + '" rx="3" fill="var(--patient-b)"/>';
     }
-    body += '<text x="' + cx.toFixed(1) + '" y="' + labY + '" text-anchor="middle" class="ts-axis">' + v + '</text>';
+    body += '<text x="' + cx.toFixed(1) + '" y="' + labY + '" text-anchor="middle" class="ts-axis">' + fmt(key, v) + '</text>';
   });
   var overlay = st.matters === 0
     ? '<text x="' + (Ws / 2) + '" y="' + (baseY + 20) + '" text-anchor="middle" class="ts-axis" style="font-style:italic">makes no difference</text>'
@@ -668,9 +690,10 @@ function drawLine(key, ghost, preview) {
   if (preview && JSON.stringify(preview) !== cur) s += '<path d="' + curvePath(key, preview) + '" class="ts-preview"/>';
   var animate = ghost && ghost.key === key && !ghost.noAnim && JSON.stringify(ghost.st) !== cur;
   s += '<path d="' + curvePath(key, st) + '" pathLength="1" class="ts-main' + (animate ? ' ts-draw' : '') + '" stroke="' + color + '"/>';
-  vals.forEach(function(v) {
-    s += '<circle cx="' + lcX(key, v).toFixed(1) + '" cy="' + lcY(editValueFor(st, key, v)).toFixed(1) + '" r="3" fill="' + color + '"/>'
-       + '<text x="' + lcX(key, v).toFixed(1) + '" y="' + LC.labY + '" text-anchor="middle" class="ts-axis">' + v + '</text>';
+  vals.forEach(function(v, i) {
+    var x = lcX(key, v);
+    s += '<circle cx="' + x.toFixed(1) + '" cy="' + lcY(editValueFor(st, key, v)).toFixed(1) + '" r="3" fill="' + color + '"/>'
+       + '<text x="' + x.toFixed(1) + '" y="' + LC.labY + '" text-anchor="middle" class="ts-axis">' + axisLab(key, v, i === vals.length - 1) + '</text>';
   });
   if (st.matters === 0) s += '<text x="' + ((x0 + x1) / 2) + '" y="' + (LC.base - 10) + '" text-anchor="middle" class="ts-axis" style="font-style:italic">makes no difference</text>';
   return '<svg class="ts-linechart" viewBox="0 0 ' + LC.W + ' ' + LC.H + '" role="img" aria-label="How ' + esc(noun(key)) + ' changes a patient\u2019s chances">' + s + '</svg>';
@@ -704,7 +727,7 @@ function featureSentence(key) {
   if (st.mode === 'anyvsnone') {
     s = (st.cutoff <= (valuesOf(key) ? valuesOf(key)[1] : r.min + 1))
       ? ("Having any " + noun(key) + " at all counts " + side + ".")
-      : ("Reaching " + st.cutoff + " or more " + noun(key) + " counts " + side + ", while less makes no difference.");
+      : ("Reaching " + fmt(key, st.cutoff) + " or more " + noun(key) + " counts " + side + ", while less makes no difference.");
   } else if (st.mode === 'first') {
     s = "More " + noun(key) + " counts " + side + ", and the first bit matters the most.";
   } else if (st.mode === 'last') {
@@ -752,7 +775,7 @@ function explainCase(a, b, userChoice) {
   var rows = FEATURES_DATA.map(function(f) {
     var st = model.features[f.key], on = st.matters > 0;
     var d = contrib(f.key, a) - contrib(f.key, b);
-    return {key: f.key, label: f.label, aVal: a[f.key], bVal: b[f.key], on: on, d: d,
+    return {key: f.key, label: flabel(f), aVal: a[f.key], bVal: b[f.key], on: on, d: d,
             favors: (on && Math.abs(d) > 1e-9) ? (d > 0 ? 'A' : 'B') : null,
             gated: on && !!st.cond.on && (!condPass(f.key, a) || !condPass(f.key, b)), decides: false, unused: false};
   });
@@ -766,7 +789,7 @@ function explainCase(a, b, userChoice) {
     else if (nA === nB) head = 'The same number of factors favor each patient (' + nA + ' each), so the model defaults to Patient B.';
     else head = 'The model picks Patient ' + winner + ': more factors favor ' + winner + ' (' + (winner === 'A' ? nA : nB) + ' vs ' + (winner === 'A' ? nB : nA) + '). It counts factors, not how big each difference is.';
   } else if (agg === 'prominent') {
-    var order = FEATURES_DATA.map(function(f) { return f.key; }).sort(function(x, y) { return ampFor(model.features[y].matters) - ampFor(model.features[x].matters); });
+    var order = CANON_KEYS.slice().sort(function(x, y) { return ampFor(model.features[y].matters) - ampFor(model.features[x].matters); });
     var seen = false;
     order.forEach(function(k) {
       var r = rows.filter(function(q) { return q.key === k; })[0];
@@ -823,10 +846,10 @@ function explainHTML(a, b, userChoice) {
       : (agg === 'prominent' && r.decides) ? 'decides \u2192 ' + r.favors
       : (agg === 'prominent' && r.unused) ? 'not consulted'
       : 'favors ' + r.favors + ' +' + Math.abs(r.d).toFixed(1);
-    if (r.gated) note += ' \u00b7 exception: doesn\u2019t count here';
+    if (r.gated) note += ' \u00b7 \u201conly counts in some cases\u201d: doesn\u2019t count here';
     html += '<div class="why-row' + (r.favors ? '' : ' quiet') + (r.decides ? ' decides' : '') + '">'
       + '<span class="lab">' + esc(r.label) + infoIcon(r.key) + '</span>'
-      + '<span class="vals">A ' + esc(r.aVal) + ' \u00b7 B ' + esc(r.bVal) + '</span>'
+      + '<span class="vals">A ' + esc(fmt(r.key, r.aVal)) + ' \u00b7 B ' + esc(fmt(r.key, r.bVal)) + '</span>'
       + '<span class="why-bar"><span class="h l">' + (r.favors === 'A' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span>'
       + '<span class="h r">' + (r.favors === 'B' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span></span>'
       + '<span class="note">' + esc(note) + '</span></div>';
@@ -839,7 +862,7 @@ function explainHTML(a, b, userChoice) {
 
 // ── adapter for the shared "See how your model performs" overlay (templates/_case_overlay.html) ──
 window.CaseAdapter = {
-  features: FEATURES_DATA,
+  features: function() { return orderedFeatures(); },     // the case browser lists factors strongest first, too
   ranges: FEATURE_RANGES,
   valuesOf: valuesOf,
   past: function() { return pastScenarios; },
@@ -847,6 +870,7 @@ window.CaseAdapter = {
   inUse: function(key) { return model.features[key].matters > 0; },
   explain: function(a, b, userChoice) { return explainHTML(a, b, userChoice); },
   infoIcon: infoIcon,
+  fmt: fmt,
   logEvent: logEvent
 };
 document.getElementById('ts-match-panel').addEventListener('click', function() { CaseOverlay.open(); });
@@ -855,6 +879,44 @@ function colorize(sentence) {
   return esc(sentence)
     .replace(/in a patient&#39;s favor|in a patient\u2019s favor/g, '<b class="favor">in a patient\u2019s favor</b>')
     .replace(/against a patient/g, '<b class="against">against a patient</b>');
+}
+
+// ── "Your whole model, in plain words": a short, conversational read-out, strongest factor first ──
+function condPhrase(c) {
+  return c.test === 'zero' ? ('has no ' + noun(c.when)) : c.test === 'nonzero' ? ('has any ' + noun(c.when)) : ('has at least ' + c.n + ' ' + noun(c.when));
+}
+function clauseHTML(key) {
+  var st = model.features[key], r = FEATURE_RANGES[key], n = noun(key);
+  var side = st.dir === 'favor' ? '<b class="favor">in a patient\u2019s favor</b>' : '<b class="against">against a patient</b>';
+  var s;
+  if (st.mode === 'anyvsnone') {
+    s = (st.cutoff <= (valuesOf(key) ? valuesOf(key)[1] : r.min + 1))
+      ? ('having any ' + esc(n) + ' at all works ' + side)
+      : ('once it reaches ' + esc(String(fmt(key, st.cutoff))) + ' or more, ' + esc(n) + ' works ' + side + ', and below that it makes no difference');
+  } else {
+    s = 'more ' + esc(n) + ' works ' + side + (st.mode === 'first' ? ', and the first bit matters most' : st.mode === 'last' ? ', and the last bit matters most' : '');
+  }
+  if (st.cond.on) s += ', but only when the patient ' + esc(condPhrase(st.cond));
+  return s;
+}
+function joinNames(names) { return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]; }
+function plainWordsHTML() {
+  var feats = orderedFeatures();
+  var on = feats.filter(function(f) { return model.features[f.key].matters > 0; });
+  var off = feats.filter(function(f) { return model.features[f.key].matters === 0; });
+  if (!on.length) return 'Right now the model isn\u2019t using any of the factors, so it has nothing to go on and will simply default to Patient B. Switch some factors on in Step 1 to teach it how you decide.';
+  var agg = model.aggregation, ranked = agg !== 'tally';
+  var out = [agg === 'tally' ? 'When you choose between two patients, the model thinks you count how many factors favor each of them, and go with whoever has more.'
+           : agg === 'prominent' ? 'When you choose between two patients, the model thinks you look at the most important factor that differs between them, and let that one decide.'
+           : 'When you choose between two patients, the model thinks you weigh all the factors against each other, and go with whoever comes out ahead overall.'];
+  on.forEach(function(f, i) {
+    var name = '<b>' + esc(flabel(f)) + '</b>';
+    var lead = ranked ? (i === 0 ? 'The factor that matters most to you is ' : i === 1 ? 'Next comes ' : i === 2 ? 'After that, ' : 'Then ') + name
+                      : (i === 0 ? 'You look at ' : 'You also look at ') + name;
+    out.push(lead + (ranked ? ' (it counts ' + strengthWordFor(model.features[f.key].matters) + ')' : '') + ': ' + clauseHTML(f.key) + '.');
+  });
+  if (off.length) out.push('You don\u2019t seem to take ' + esc(joinNames(off.map(function(f) { return flabel(f).toLowerCase(); }))) + ' into account.');
+  return out.join(' ');
 }
 
 function renderSummary() {
@@ -871,9 +933,7 @@ function renderSummary() {
     subEl.textContent = 'Tap to see which cases match — or try your own.';
   }
 
-  var lines = FEATURES_DATA.map(function(f) { return featureSentence(f.key); });
-  lines.push(aggSentence(model.aggregation));
-  document.getElementById('ts-summary-text').innerHTML = lines.map(colorize).join(' ');
+  document.getElementById('ts-summary-text').innerHTML = plainWordsHTML();
   if (FINAL_MODE) renderFinalHeader(n, current);
 }
 
@@ -903,6 +963,18 @@ function compactModelSummary() {
   return bits.join(' &nbsp;\u00b7&nbsp; ') + ' &nbsp;&mdash;&nbsp; ' + esc(aggShort(model.aggregation));
 }
 
+// Factors listed strongest first everywhere on this page. Ties (and all the "doesn't matter" ones) keep the order this
+// participant was assigned. The order is frozen while a strength slider is being dragged, so the list doesn't jump
+// under the participant's finger; it re-sorts as soon as they let go.
+var tsOrderCache = null;
+function orderedFeatures() {
+  if (tsOrderCache) return tsOrderCache;
+  tsOrderCache = FEATURES_DATA.map(function(x, i) { return {f: x, i: i}; })
+    .sort(function(a, b) { return (ampFor(model.features[b.f.key].matters) - ampFor(model.features[a.f.key].matters)) || (a.i - b.i); })
+    .map(function(x) { return x.f; });
+  return tsOrderCache;
+}
+
 // v2: only the selected feature's pane is shown at a time — a selector list
 // on the left picks which one, instead of every card being visible at once.
 var tsSelectedFeature = (FEATURES_DATA[0] || {}).key;
@@ -910,23 +982,21 @@ var tsSelectedFeature = (FEATURES_DATA[0] || {}).key;
 function renderFeatList() {
   var list = document.getElementById('ts-feat-list');
   list.innerHTML = '';
-  FEATURES_DATA.forEach(function(f) {
+  orderedFeatures().forEach(function(f) {
     var st = model.features[f.key];
     var item = document.createElement('button');
     item.type = 'button';
     item.className = 'ts-feat-item' + (f.key === tsSelectedFeature ? ' active' : '');
     var tagCls = st.matters === 0 ? 'none' : st.dir;
     var tagTxt = st.matters === 0 ? 'off' : (st.dir === 'favor' ? '\u2191 Helps' : '\u2193 Against');
-    item.innerHTML = '<span class="ts-feat-row"><span class="ts-feat-item-name">' + esc(f.label) + infoIcon(f.key) + '</span>'
-      + '<span class="ts-feat-item-tag ' + tagCls + '">' + tagTxt + '</span></span>' + strengthBar(f.key);
+    item.innerHTML = '<span class="ts-feat-item-name">' + labelHTML(f) + '</span>'
+      + '<span class="ts-feat-meta">' + strengthBar(f.key) + '<span class="ts-feat-item-tag ' + tagCls + '">' + tagTxt + '</span></span>';
     item.addEventListener('click', function() { tsSelectedFeature = f.key; tsGhost = null; tsDelta = null; refresh(); });
     list.appendChild(item);
   });
 }
 
-// Shape and Cutoff are tucked behind an "Advanced settings" toggle so the
-// default view only shows Direction + Strength. The toggle auto-opens when
-// the feature's mode is not "steady" so the actual setting is always visible.
+// Shape (and Cutoff, for "only past a point") are always shown for a factor that matters, next to Direction and Strength.
 var tsExceptOpen = {};
 
 function renderFeatures() {
@@ -934,9 +1004,10 @@ function renderFeatures() {
   var host = document.getElementById('ts-features');
   host.innerHTML = '';
   var gmax = globalMax();
-  var idx = FEATURES_DATA.findIndex(function(f) { return f.key === tsSelectedFeature; });
+  var list = orderedFeatures();
+  var idx = list.findIndex(function(f) { return f.key === tsSelectedFeature; });
   if (idx === -1) idx = 0;
-  var f = FEATURES_DATA[idx];
+  var f = list[idx];
   if (!f) return;
   var st = model.features[f.key];
   var r = FEATURE_RANGES[f.key];
@@ -957,11 +1028,7 @@ function renderFeatures() {
     + '</div></div>';
 
   if (st.matters > 0) {
-    var advOpen = FINAL_MODE || st.mode !== 'steady';
-    html += '<button type="button" class="ts-advanced-toggle" id="ts-adv-btn-' + f.key + '">'
-      + (advOpen ? '\u25be' : '\u25b8') + ' Advanced settings</button>';
-    html += '<div class="ts-advanced-body' + (advOpen ? ' open' : '') + '" id="ts-adv-body-' + f.key + '">';
-    html += '<div class="ts-row"><span class="lab">Shape</span><div class="ts-btns">'
+    html += '<div class="ts-row ts-shape-row"><span class="lab">Shape</span><div class="ts-btns ts-shape-btns">'
       + btn('mode', f.key, 'anyvsnone', 'Only past a point', st.mode === 'anyvsnone', shapeIcon(f.key, st, 'anyvsnone'))
       + btn('mode', f.key, 'first', 'First counts most', st.mode === 'first', shapeIcon(f.key, st, 'first'))
         + btn('mode', f.key, 'last', 'Last counts most', st.mode === 'last', shapeIcon(f.key, st, 'last'))
@@ -970,7 +1037,6 @@ function renderFeatures() {
     if (st.mode === 'anyvsnone') {
       html += '<div class="ts-row"><span class="lab">Cutoff</span>' + cutoffControl(f.key, st) + '</div>';
     }
-    html += '</div>';
     html += '<div class="ts-row"><span class="lab">How strongly</span><div class="ts-btns">'
       + btn('str', f.key, '1', 'a little', Math.abs(st.matters - 1) < 0.05)
       + btn('str', f.key, '2', 'somewhat', Math.abs(st.matters - 2) < 0.05)
@@ -987,7 +1053,7 @@ function renderFeatures() {
   if (!FINAL_MODE) {
     html += '<hr class="ts-divider">';
     var exOpen = !!tsExceptOpen[f.key] || st.cond.on;
-    html += exOpen ? renderExceptPanel(f, st) : '<button type="button" class="ts-except-toggle" id="ts-except-open">+ Add exception</button>';
+    html += exOpen ? renderExceptPanel(f, st) : '<button type="button" class="ts-except-toggle" id="ts-except-open">+ This only counts in some cases</button>';
   }
 
   card.innerHTML = html;
@@ -996,16 +1062,16 @@ function renderFeatures() {
   var nav = document.createElement('div');
   nav.className = 'ts-v2-nav';
   nav.innerHTML = '<button type="button" class="ts-btn" id="ts-feat-prev"' + (idx === 0 ? ' disabled' : '') + '>\u2190 Previous factor</button>'
-    + '<button type="button" class="ts-btn" id="ts-feat-next"' + (idx === FEATURES_DATA.length - 1 ? ' disabled' : '') + '>Next factor \u2192</button>';
+    + '<button type="button" class="ts-btn" id="ts-feat-next"' + (idx === list.length - 1 ? ' disabled' : '') + '>Next factor \u2192</button>';
   host.appendChild(nav);
   if (idx > 0) {
     document.getElementById('ts-feat-prev').addEventListener('click', function() {
-      tsSelectedFeature = FEATURES_DATA[idx - 1].key; tsGhost = null; tsDelta = null; refresh();
+      tsSelectedFeature = list[idx - 1].key; tsGhost = null; tsDelta = null; refresh();
     });
   }
-  if (idx < FEATURES_DATA.length - 1) {
+  if (idx < list.length - 1) {
     document.getElementById('ts-feat-next').addEventListener('click', function() {
-      tsSelectedFeature = FEATURES_DATA[idx + 1].key; tsGhost = null; tsDelta = null; refresh();
+      tsSelectedFeature = list[idx + 1].key; tsGhost = null; tsDelta = null; refresh();
     });
   }
 
@@ -1031,6 +1097,7 @@ function renderFeatures() {
     host.querySelectorAll('.ts-strength-slider').forEach(function(inp) {
       var key = inp.getAttribute('data-key');
       inp.addEventListener('input', function() { inp.style.setProperty('--f', ((parseFloat(inp.value) - 1) / 2).toFixed(3)); sliderEdit(key, parseFloat(inp.value)); });
+      inp.addEventListener('change', resort);
       inp.addEventListener('change', function() { sliderDone(key); });
     });
     host.querySelectorAll('[data-cutoff]').forEach(function(inp) {
@@ -1044,12 +1111,6 @@ function renderFeatures() {
       b.addEventListener('mouseenter', function() { showPreview(b); });
       b.addEventListener('mouseleave', function() { endPreview(b); });
     });
-    var advBtn = document.getElementById('ts-adv-btn-' + f.key);
-    if (advBtn) advBtn.addEventListener('click', function() {
-      var body = document.getElementById('ts-adv-body-' + f.key);
-      var open = body.classList.toggle('open');
-      advBtn.firstChild.nodeValue = (open ? '▾' : '▸') + ' Advanced settings';
-    });
     var openBtn = document.getElementById('ts-except-open');
     if (openBtn) openBtn.addEventListener('click', function() { tsExceptOpen[f.key] = true; refresh(); });
     wireExceptPanel(f, st);
@@ -1057,17 +1118,17 @@ function renderFeatures() {
 }
 
 function otherFeatures(key) {
-  return FEATURES_DATA.filter(function(x) { return x.key !== key; });
+  return orderedFeatures().filter(function(x) { return x.key !== key; });
 }
 
 function renderExceptPanel(f, st) {
   var c = st.cond;
   var others = otherFeatures(f.key);
   var whenOpts = others.map(function(o) {
-    return '<option value="' + o.key + '"' + (c.when === o.key ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+    return '<option value="' + o.key + '"' + (c.when === o.key ? ' selected' : '') + '>' + esc(flabel(o)) + '</option>';
   }).join('');
   var html = '<div class="ts-except-panel">'
-    + '<span>Only counts when the patient</span>'
+    + '<span>This only counts when the patient</span>'
     + '<select id="ts-except-test">'
     + '<option value="nonzero"' + (c.test === 'nonzero' ? ' selected' : '') + '>has any</option>'
     + '<option value="zero"' + (c.test === 'zero' ? ' selected' : '') + '>has none of</option>'
@@ -1155,6 +1216,8 @@ function renderAgg() {
 }
 
 function refresh() {
+  tsOrderCache = null;          // re-sort by weight now (a slider drag keeps the order until release)
+  renderOverview();
   renderFeatures();
   renderAgg();
   tsGhost = null;
@@ -1167,6 +1230,29 @@ function refresh() {
 // Step 1/2 open as a one-line overview first; clicking a header expands its
 // body below, so loading the page shows the model's shape, not every
 // control at once.
+// "How strongly each factor matters": every factor on ONE scale, strongest first. Click a row to open that factor below.
+function renderOverview() {
+  var host = document.getElementById('ts-overview');
+  if (!host) return;
+  var html = '<div class="ts-overview-title">How strongly each factor matters <span class="ts-overview-sub">(one shared 1\u20133 scale, strongest first)</span></div>';
+  orderedFeatures().forEach(function(f) {
+    var st = model.features[f.key];
+    var note = st.matters === 0 ? 'doesn\u2019t matter' : ((st.dir === 'favor' ? 'helps \u00b7 ' : 'against \u00b7 ') + strengthWordFor(st.matters) + ' (' + st.matters.toFixed(1) + ')');
+    html += '<div class="ts-ov-row clickable" data-key="' + f.key + '" tabindex="0" role="button"><span>' + labelHTML(f) + '</span>' + strengthBar(f.key) + '<span class="ts-ov-note">' + note + '</span></div>';
+  });
+  host.innerHTML = html;
+  host.querySelectorAll('.ts-ov-row').forEach(function(row) {
+    function go() {
+      tsSelectedFeature = row.getAttribute('data-key'); tsGhost = null; tsDelta = null;
+      if (!document.getElementById('ts-step1-body').classList.contains('open')) StudyFlow.toggleStep(1);
+      refresh();
+      document.getElementById('ts-step1-body').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    }
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+}
+
 function renderStepPreviews() {
   var on = FEATURES_DATA.filter(function(f) { return model.features[f.key].matters > 0; }).length;
   var off = FEATURES_DATA.length - on;
@@ -1201,11 +1287,9 @@ if (!FINAL_MODE) {
 }
 
 INITIAL_MODEL_JSON = JSON.stringify(model);
+tsSelectedFeature = orderedFeatures()[0].key;      // start on the strongest factor
 refresh();
-if (FINAL_MODE) { toggleStep(1); toggleStep(2); }
-// Auto-expand Step 1 on page load so the model is immediately visible
-if (!FINAL_MODE) StudyFlow.toggleStep(1);
-if (!FINAL_MODE) startTutorial();
+if (FINAL_MODE) { toggleStep(2); }                 // step 1 is open by default
 // Pulse the Step 1 header to signal it's interactive
 (function() {
   var card = document.getElementById('ts-step1-toggle');
@@ -1311,6 +1395,9 @@ function renderTutorialStep() {
     dots.appendChild(d);
   });
   var el = s.target ? document.querySelector(s.target) : null;
+  // If the target sits inside a collapsed step card, open that card first so the spotlight has something to point at.
+  var holder = el && el.closest('.ts-step-body');
+  if (holder && !holder.classList.contains('open')) { var m = /ts-step(\d)-body/.exec(holder.id); if (m) StudyFlow.toggleStep(parseInt(m[1], 10)); }
   if (el) el.scrollIntoView({block: 'nearest', behavior: 'instant'});
   _updateSpotlightPositions();
 }
@@ -1357,5 +1444,6 @@ document.addEventListener('keydown', function(e) {
   });
 })();
 window.addEventListener('scroll', _updateSpotlightPositions, {passive: true});
+if (!FINAL_MODE) startTutorial();   // must run after TUTORIAL_MODE and the tutorial code above are defined
 </script>
 {% endblock %}

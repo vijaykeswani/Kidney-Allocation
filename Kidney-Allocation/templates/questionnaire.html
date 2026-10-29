@@ -3,7 +3,7 @@
 {% block content %}
 <div class="progress-track"><div class="progress-fill" style="width:{{ (idx / n_total * 100) | round(1) }}%"></div></div>
 <div class="muted" style="font-size:15px; font-weight:500; margin-top:12px; margin-bottom:26px;">
-  Scenario {{ idx + 1 }} of {{ n_total }}
+  {% if part == 2 %}Part 2 · {% endif %}Scenario {{ idx + 1 }} of {{ n_total }}
 </div>
 
 <h2>{{ heading }}</h2>
@@ -18,7 +18,7 @@
     {% for p in features %}
     <div class="feature-row">
       <div class="feature-name">{{ feature_labels.get(p, p.replace('_',' ')|title) }}{{ info(descriptions.get(p)) }}</div>
-      <div class="feature-value">{{ sc.A[p] | round(1) if sc.A[p] % 1 else sc.A[p]|int }}</div>
+      <div class="feature-value">{{ sc.A[p] | round(1) if sc.A[p] % 1 else sc.A[p]|int }}{{ value_suffix.get(p, '') }}</div>
     </div>
     {% endfor %}
   </div>
@@ -27,7 +27,7 @@
     {% for p in features %}
     <div class="feature-row">
       <div class="feature-name">{{ feature_labels.get(p, p.replace('_',' ')|title) }}{{ info(descriptions.get(p)) }}</div>
-      <div class="feature-value">{{ sc.B[p] | round(1) if sc.B[p] % 1 else sc.B[p]|int }}</div>
+      <div class="feature-value">{{ sc.B[p] | round(1) if sc.B[p] % 1 else sc.B[p]|int }}{{ value_suffix.get(p, '') }}</div>
     </div>
     {% endfor %}
   </div>
