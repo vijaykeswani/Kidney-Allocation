@@ -67,17 +67,19 @@ def run(arm, name, edit=True, direct_part2=False):
     else:
         r = c.get("/results"); check(r.status_code == 200, f"{arm}: /results")
         body_html = r.data.decode()
-        check("The model’s goal is to predict the choices you would make in the future" in body_html and "click “Lock in my model and continue”" in body_html, f"{arm}: the view/edit page needs the full introduction")
+        check("The goal of this model is to predict the choices you would make in the future" in body_html and "click “Lock in my model and continue”" in body_html and "of your previous answers correctly" in body_html, f"{arm}: the view/edit page needs the full introduction")
         check(body_html.index('id="ts-match-panel"') > body_html.index('id="ts-summary-text"'), f"{arm}: the match panel belongs at the bottom, because the introduction says so")
         check("Advanced settings" not in body_html, f"{arm}: no 'Advanced settings' toggle")
+        check('id="ts-lock-gate"' in body_html and "REQUIRE_REVIEW = true" in body_html and "StudyReview.init(" in body_html, f"{arm}: lock-in must be gated on the participant having reviewed the model")
+        check("The current version predicts" in body_html and 'id="ts-intro-x"' in body_html, f"{arm}: the intro needs its live 'predicts X/N correctly' line")
         if kind == "twostage_v2":     # the first-visit tutorial must be started AFTER the variables it reads exist (it silently never opened before)
             check(body_html.index("var TUTORIAL_MODE") < body_html.index("startTutorial();"), f"{arm}: startTutorial() runs before TUTORIAL_MODE is defined, so the tutorial never opens")
         check("built an AI model from your answers so far" in body_html, f"{arm}: the view/edit page needs its header")
         if kind in ("twostage_v2", "fft"):        # (the older v1 layout has no step cards)
             check('class="ts-step-body open" id="ts-step1-body"' in body_html, f"{arm}: Step 1 must be open on arrival so the model is visible without clicking")
         if kind == "twostage_v2":
-            check('id="ts-overview"' in body_html and 'id="ts-step2-body"' in body_html and 'class="ts-step-body open" id="ts-step2-body"' not in body_html,
-                  f"{arm}: v2 needs the 'How strongly each factor matters' section, with Step 2 collapsed")
+            check('id="ts-feat-list"' in body_html and 'id="ts-review-progress"' in body_html and 'class="ts-step-body open" id="ts-step2-body"' not in body_html,
+                  f"{arm}: v2 needs the factor list with its review progress, and Step 2 collapsed")
         if edit:
             if arm == "fft":
                 db.set_fft_override(name, {"nodes": [{"feature": "years_waiting_diff", "op": ">=", "threshold": 4.0, "use_abs": True,

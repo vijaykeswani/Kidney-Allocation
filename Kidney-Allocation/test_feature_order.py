@@ -77,7 +77,7 @@ check([c for c in cols if c.startswith("A_")] == [f"A_{k}" for k in features.FEA
 # ---- rejection chance: wording and values of the published study (arXiv 2511.10032, Fig. A.1 / Table A.1)
 rr = features.FEATURE_BY_KEY["rejection_risk"]
 check(features.values_map()["rejection_risk"] == [1, 2, 3, 5, 10, 15, 20], "rejection chance values should be 1, 2, 3, 5, 10, 15, 20")
-check(rr["label"] == "Transplantation rejection risk", "rejection risk label")
+check(rr["label"] == "Transplant rejection risk", "rejection risk label")
 check("in the next year" in rr["description"], "rejection risk info text")
 check(rr.get("value_suffix") == "%", "rejection chance values should be shown as percentages")
 q = c.get("/questionnaire/1").data.decode()

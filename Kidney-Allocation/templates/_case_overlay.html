@@ -10,7 +10,6 @@
       predict:   function(a, b) -> {choice: 'A'|'B', how: 'strongly' | 'decided at step 2' | ...},
       inUse:     function(key) -> bool,                // is this factor part of the model right now? (bold row)
       explain:   function(a, b, userChoice) -> html,   // the model-specific explanation
-      infoIcon:  function(key) -> html,
       logEvent:  function(name, detail)
     };
     CaseOverlay.open();
@@ -141,7 +140,7 @@ var CaseOverlay = (function() {
 
   function rows(patient) {
     return featureList().map(function(f) {
-      return '<div class="co-prow ' + (A().inUse(f.key) ? 'on' : 'off') + '"><span>' + esc(f.label) + A().infoIcon(f.key) + '</span><span>' + esc(fv(f.key, patient[f.key])) + '</span></div>';
+      return '<div class="co-prow ' + (A().inUse(f.key) ? 'on' : 'off') + '"><span>' + esc(f.label) + '</span><span>' + esc(fv(f.key, patient[f.key])) + '</span></div>';
     }).join('');
   }
 
@@ -204,7 +203,7 @@ var CaseOverlay = (function() {
       html += '<div><div class="co-pat ' + side.toLowerCase() + '">\u25cf Patient ' + side + '</div>';
       feats.forEach(function(f) {
         var r = A().ranges[f.key], vs = A().valuesOf(f.key);
-        html += '<div class="co-slider"><div class="co-slider-head"><span>' + esc(f.label) + A().infoIcon(f.key) + '</span>'
+        html += '<div class="co-slider"><div class="co-slider-head"><span>' + esc(f.label) + '</span>'
           + '<span id="co-b-' + side + '-' + f.key + '" style="font-weight:600;">' + esc(fv(f.key, builderVals[side][f.key])) + '</span></div>'
           + (vs ? '<input type="range" min="0" max="' + (vs.length - 1) + '" step="1" value="' + Math.max(0, vs.indexOf(builderVals[side][f.key])) + '" data-idx="1" '
                 : '<input type="range" min="' + r.min + '" max="' + r.max + '" value="' + builderVals[side][f.key] + '" ')

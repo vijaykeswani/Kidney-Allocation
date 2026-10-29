@@ -43,7 +43,7 @@
     },
     {
       "key": "rejection_risk",
-      "label": "Transplantation rejection risk",
+      "label": "Transplant rejection risk",
       "description": "Percent chance that the patient’s immune system will reject the transplanted kidney in the next year.",
       "min": 1,
       "max": 20,

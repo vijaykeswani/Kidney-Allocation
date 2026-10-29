@@ -763,8 +763,8 @@ body { background: #fff; }
     <button type="button" id="btn-help"></button>
   </div>
 
-  {% call step(1, "Step 1. The checks the AI applies, in order", open=True) %}
-  <div class="ts-step-sub">The AI goes through these checks from top to bottom, and the first one that applies decides the case. {% if not final_mode %}Click any check to change it, or add a new one.{% endif %}</div>
+  {% call step(1, "Step 1. Approve or modify the checks the AI applies, in order", open=True) %}
+  <div class="ts-step-sub">The AI goes through these checks from top to bottom, and the first one that applies decides the case. {% if not final_mode %}Click any check to change it, or add a new one. When you are done, tell us below whether the tree matches how you decide.{% endif %}</div>
   {% if not final_mode %}<div class="ts-legend">✎ click a check to edit it &nbsp;·&nbsp; ▲▼ move it up or down &nbsp;·&nbsp; dashed outline = you can click it</div>{% endif %}
   <div class="tree-card">
     <div id="toolbar">
@@ -897,6 +897,7 @@ body { background: #fff; }
 
     </div><!-- /#svg-scroll -->
   </div><!-- /.tree-card -->
+  {% if not final_mode %}<div class="ts-review-bar" id="ts-tree-review"></div>{% endif %}
   {% endcall %}
 
   {{ summary_card() }}
@@ -2173,6 +2174,7 @@ document.getElementById('btn-add').addEventListener('click', function() {
 // (templates/_study_flow.html) and the "See how your model performs" overlay (templates/_case_overlay.html) are the
 // SAME code the feature-list page uses; only the model differs.
 editing = !FINAL_MODE;              // read-only on the final page, exactly like the feature-list page
+var REQUIRE_REVIEW = true;   // lock-in stays unavailable until the tree has been approved or modified (set false to switch off)
 var INITIAL_TREE_JSON = null;      // snapshot once loaded, to know whether there are unsaved edits
 
 function commitOpenPanels() { savePanel(); saveLeafPanel(); saveRefinePanel(); saveDefaultPanel(); }
@@ -2182,6 +2184,7 @@ function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
 function updateMatchCount() {      // the shared match panel: same ids and wording as the feature-list page
   var summary = auditMatchSummary();
   document.getElementById('ts-match-num').textContent = summary.total ? summary.matches : '\u2013';
+  var ix = document.getElementById('ts-intro-x'); if (ix) ix.textContent = summary.total ? summary.matches : '\u2013';
   document.getElementById('ts-match-line').textContent = summary.total
     ? ('The model matches your choices in ' + summary.matches + ' of ' + summary.total + ' cases.') : '';
   document.getElementById('ts-match-sub').textContent = (BASELINE_MATCHES !== null && BASELINE_MATCHES !== summary.matches)
@@ -2203,7 +2206,15 @@ function treePlainWords() {
   out.push('If none of the checks settles it, the model goes with Patient ' + dflt + '.');
   return out.join(' ');
 }
-function onTreeChanged() {          // runs after every redraw, so everything stays in step with the edits
+function renderTreeReview() {
+  var host = document.getElementById('ts-tree-review');
+  if (!host || FINAL_MODE) return;
+  host.innerHTML = StudyReview.actionsHTML('tree', 'this tree');
+  StudyReview.wireActions(host, 'tree', renderTreeReview);
+}
+function onTreeChanged() {
+  if (!FINAL_MODE && INITIAL_TREE_JSON !== null && JSON.stringify(tree) !== INITIAL_TREE_JSON) StudyReview.modified('tree');
+  renderTreeReview();          // runs after every redraw, so everything stays in step with the edits
   updateMatchCount();
   document.getElementById('ts-summary-text').textContent = treePlainWords();
   var n = ((tree && tree.nodes) || []).length;
@@ -2248,7 +2259,12 @@ StudyFlow.steps(function(n) {
     }
   }
 });
+StudyReview.init({
+  keys: ['tree'], storageKey: 'ts_review_tree', required: !FINAL_MODE && REQUIRE_REVIEW,
+  gateText: function() { return 'Before you lock in, please tell us in Step 1 whether the tree matches how you decide (or modify it).'; }
+});
 if (!FINAL_MODE) StudyFlow.init({
+  onReset: function() { StudyReview.clear(); },
   applyUrl: APPLY_URL, resetUrl: RESET_URL, rateUrl: RATE_URL, continueUrl: CONTINUE_URL, currentScore: currentScore,
   beforeApply: commitOpenPanels,
   getPayload: function() { return {tree: tree, baseline_node_count: baselineNodeCount}; },
@@ -2435,7 +2451,7 @@ var TUTORIAL_STEPS = [
   },
   {
     title: 'Apply, rate, and continue',
-    body:  'After editing, click “Apply changes” to save. Then rate how well the model ' +
+    body:  'Tell us whether the tree matches how you decide (or edit it). After editing, click “Apply changes” to save. Then rate how well the model ' +
            'matches your thinking (1–7) and click “Lock in my model and continue.”',
     target: '#ts-apply'
   }
@@ -2633,9 +2649,7 @@ window.addEventListener('scroll', _updateSpotlightPositions, {passive: true});
 document.getElementById('svg-scroll').addEventListener('scroll', _updateSpotlightPositions, {passive: true});
 
 function startTutorial() {
-  if (TUTORIAL_MODE === 'full') {
-    openTutorial('first_visit', 'view');
-  } else if (TUTORIAL_MODE === 'reminder') {
+  if (TUTORIAL_MODE === 'reminder') {      // never opens by itself: it would cover the introduction. "How to edit" opens it.
     document.getElementById('tutorial-nudge').classList.add('visible');
     logEvent('tutorial_reminder_shown', {});
   }

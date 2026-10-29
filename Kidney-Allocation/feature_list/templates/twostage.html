@@ -159,6 +159,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 .ts-lock-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin: 6px 0 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 
 /* ── per-case explanation ── */
+.ts-slider-hint { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 10px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -178,6 +179,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 {% if final_mode %}{{ match_panel_html }}{% endif %}
 
 {% include "_case_overlay.html" %}
+{% include "_study_flow.html" %}
 
 <div class="ts-step-title">Step 1. Check if the model is correct about how you consider each feature.</div>
 <div class="ts-step-sub">
@@ -189,6 +191,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 </div>
 
 <div class="ts-overview" id="ts-overview"></div>
+{% if not final_mode %}<div class="ts-review-progress" id="ts-review-progress"><div class="ts-rp-track"><i id="ts-rp-fill"></i></div><span id="ts-rp-text"></span></div>{% endif %}
 <div class="ts-grid" id="ts-features"></div>
 
 <div class="ts-step-title">Step 2. Check if this is how you combine the features.</div>
@@ -214,6 +217,7 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 <div class="muted" style="font-size:14px; margin-bottom:14px;">1 = not at all &nbsp;&nbsp;·&nbsp;&nbsp; 7 = perfectly</div>
 <div style="display:flex; gap:8px; margin-bottom:20px;" id="ts-score-row"></div>
 
+<div class="ts-lock-gate" id="ts-lock-gate" hidden></div>
 <div class="ts-lock-note">When you continue, your model is <b>locked in</b> and won’t change again. Next you’ll make a few more choices, which test how well it predicts you on cases it has never seen. Any edits you haven’t applied yet are saved first.</div>
 <div style="display:flex; justify-content:flex-end;">
   <button class="btn btn-primary" id="ts-continue" type="button">Lock in my model and continue →</button>
@@ -247,6 +251,7 @@ var BASELINE_MATCHES = {{ baseline_matches | tojson }};
 var LOG_URL = {{ log_url | tojson }};
 var FINAL_EDITED = {{ final_edited | tojson }};
 var FINAL_ARM = {{ final_arm | tojson }};
+var REQUIRE_REVIEW = true;   // lock-in stays unavailable until every factor is approved or modified (set false to switch off)
 var INITIAL_MODEL_JSON = null;     // snapshot at page load, to know whether there are unsaved edits
 
 var AMP = [0, 1.0, 2.0, 3.0];   // strengths 1/2/3 = a little / somewhat / a lot: the on-screen scale IS the weight
@@ -326,6 +331,7 @@ function renderFinalHeader(n, current) {
 }
 
 function applyEdit(key, mutate) {
+  StudyReview.modified(key);
   var before = calls();
   tsGhost = {key: key, st: cloneJSON(model.features[key])};
   mutate(model.features[key]);
@@ -343,6 +349,7 @@ function applyAggEdit(agg) {
   refresh();
 }
 function sliderEdit(key, value) {
+  StudyReview.modified(key);
   if (!tsDrag || tsDrag.key !== key) tsDrag = {key: key, st: cloneJSON(model.features[key]), before: calls()};
   model.features[key].matters = value;
   tsDelta = deltaStats(key, tsDrag.before);
@@ -637,7 +644,7 @@ function explainCase(a, b, userChoice) {
     } else if (agg === 'tally') {
       note = nA === nB ? 'You chose Patient ' + U + ', but the factors are tied and the model defaults to Patient B.'
                        : 'You chose Patient ' + U + ', but more factors favor ' + W + ' (' + (W === 'A' ? nA : nB) + ' to ' + (W === 'A' ? nB : nA) + ').';
-      if (hint) note += ' If the size of a difference matters to you, try \u201cadd up\u201d in Step 2.';
+      if (hint) note += ' If the size of a difference matters to you, try \u201cbalance all the factors on a single scale\u201d in Step 2.';
     } else if (agg === 'prominent') {
       note = 'You chose Patient ' + U + ', but the most important factor that differs (' + decider.label + ') favors ' + W + '.';
       if (hint) note += ' If that factor shouldn\u2019t decide on its own, try a different way of combining factors in Step 2.';
@@ -668,7 +675,7 @@ function explainHTML(a, b, userChoice) {
       : 'favors ' + r.favors + ' +' + Math.abs(r.d).toFixed(1);
     if (r.gated) note += ' \u00b7 exception: doesn\u2019t count here';
     html += '<div class="why-row' + (r.favors ? '' : ' quiet') + (r.decides ? ' decides' : '') + '">'
-      + '<span class="lab">' + esc(r.label) + infoIcon(r.key) + '</span>'
+      + '<span class="lab">' + esc(r.label) + '</span>'
       + '<span class="vals">A ' + esc(fmt(r.key, r.aVal)) + ' \u00b7 B ' + esc(fmt(r.key, r.bVal)) + '</span>'
       + '<span class="why-bar"><span class="h l">' + (r.favors === 'A' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span>'
       + '<span class="h r">' + (r.favors === 'B' ? '<i style="width:' + w.toFixed(0) + '%"></i>' : '') + '</span></span>'
@@ -744,10 +751,7 @@ function plainWordsHTML() {
   var on = feats.filter(function(f) { return model.features[f.key].matters > 0; });
   var off = feats.filter(function(f) { return model.features[f.key].matters === 0; });
   if (!on.length) return 'Right now the model isn\u2019t using any of the factors, so it has nothing to go on and will simply default to Patient B. Switch some factors on in Step 1 to teach it how you decide.';
-  var agg = model.aggregation, ranked = agg !== 'tally';
-  var out = [agg === 'tally' ? 'When you choose between two patients, the model thinks you count how many factors favor each of them, and go with whoever has more.'
-           : agg === 'prominent' ? 'When you choose between two patients, the model thinks you look at the most important factor that differs between them, and let that one decide.'
-           : 'When you choose between two patients, the model thinks you weigh all the factors against each other, and go with whoever comes out ahead overall.'];
+  var agg = model.aggregation, ranked = agg !== 'tally', out = [];
   on.forEach(function(f, i) {
     var name = '<b>' + esc(flabel(f)) + '</b>';
     var lead = ranked ? (i === 0 ? 'The factor that matters most to you is ' : i === 1 ? 'Next comes ' : i === 2 ? 'After that, ' : 'Then ') + name
@@ -755,6 +759,9 @@ function plainWordsHTML() {
     out.push(lead + (ranked ? ' (it counts ' + strengthWordFor(model.features[f.key].matters) + ')' : '') + ': ' + clauseHTML(f.key) + '.');
   });
   if (off.length) out.push('You don\u2019t seem to take ' + esc(joinNames(off.map(function(f) { return flabel(f).toLowerCase(); }))) + ' into account.');
+  out.push(agg === 'tally' ? 'When you choose between two patients, the model thinks you count how many factors favor each of them, and go with whoever has more.'
+         : agg === 'prominent' ? 'When you choose between two patients, the model thinks you look at the most important factor that differs between them, and let that one decide.'
+         : 'When you choose between two patients, the model thinks you balance all the factors on a single scale, and go with whoever it favors overall.');
   return out.join(' ');
 }
 
@@ -762,6 +769,7 @@ function renderSummary() {
   var n = pastScenarios.length;
   var current = n ? matchCount() : 0;
   document.getElementById('ts-match-num').textContent = n ? current : '\u2013';
+  var ix = document.getElementById('ts-intro-x'); if (ix) ix.textContent = n ? current : '\u2013';
   document.getElementById('ts-match-line').textContent = n
     ? ('The current model reproduces your earlier choices in ' + current + ' of ' + n + ' cases.')
     : '';
@@ -821,13 +829,18 @@ function renderFeatures() {
       + '<input type="range" class="ts-strength-slider" min="1" max="3" step="0.1" value="' + st.matters + '" data-key="' + f.key + '" style="--f:' + ((st.matters - 1) / 2).toFixed(3) + '"' + (FINAL_MODE ? ' disabled' : '') + '>'
       + '<div class="ts-ticks"><span style="--f:0">1<small>a little</small></span><span style="--f:0.5">2<small>somewhat</small></span><span style="--f:1">3<small>a lot</small></span></div></div>'
       + '<span class="ts-strength-val">strength <b id="ts-sval-' + f.key + '">' + st.matters.toFixed(1) + '</b> of 3</span></div>';
+      if (!FINAL_MODE) html += '<div class="ts-slider-hint">Use the slider for more detailed values between the numbers.</div>';
     }
     if (!FINAL_MODE) html += '<div class="ts-delta" id="ts-delta-' + f.key + '">' + deltaHTML(f.key) + '</div>';
+    if (!FINAL_MODE) {
+      html += '<div class="ts-rv-slot" data-rv-slot="' + f.key + '">' + StudyReview.actionsHTML(f.key, 'this factor') + '</div>';
+    }
     card.innerHTML = html;
     host.appendChild(card);
   });
 
   if (!FINAL_MODE) {
+    host.querySelectorAll('[data-rv-slot]').forEach(function(slot) { StudyReview.wireActions(slot, slot.getAttribute('data-rv-slot'), refresh); });
     host.querySelectorAll('[data-dir]').forEach(function(b) {
       b.addEventListener('click', function() {
         var key = b.getAttribute('data-key'), val = b.getAttribute('data-dir');
@@ -886,16 +899,17 @@ function aggIcon(val) {
   }
   return open + '<rect x="6" y="7" width="60" height="8" rx="3" style="fill:var(--patient-a)"/>'   // one factor decides; the rest fade
     + '<rect x="6" y="19" width="38" height="8" rx="3" style="fill:#e2e8f0"/>'
-    + '<rect x="6" y="31" width="22" height="8" rx="3" style="fill:#e2e8f0"/></svg>';
+    + '<rect x="6" y="31" width="22" height="8" rx="3" style="fill:#e2e8f0"/>'
+    + '<path d="M9 18 L41 40 M41 18 L9 40" style="stroke:#64748b;stroke-width:2;stroke-linecap:round;fill:none"/></svg>';
 }
 
 function renderAgg() {
   var host = document.getElementById('ts-agg');
   host.innerHTML = '';
   var opts = [
-    {val: 'weighted', t: 'Add up how much each factor counts', d: 'Takes into account how much each factor differs, not just which side it favors.'},
-    {val: 'tally', t: 'Count how many factors favor each patient', d: 'Whoever has more factors in their favor wins — the size of each difference is ignored.'},
-    {val: 'prominent', t: 'Let the most important factor decide', d: 'Whichever patient the single most important factor favors wins.'}
+    {val: 'weighted', t: 'Balance all the factors on a single scale.', d: 'Each factor tips the scale toward one patient, depending on how much that factor matters to you and how far apart the two patients are on it. Whoever the scale favors overall gets the kidney.'},
+    {val: 'tally', t: 'Count how many factors favor each patient.', d: 'The kidney goes to whoever has more factors in their favor, regardless of how important each factor is or how far apart the factor values of the two patients are.'},
+    {val: 'prominent', t: 'The most important factor decides.', d: 'Choose the single most important factor, and give the kidney to the patient that factor favors.'}
   ];
   opts.forEach(function(o) {
     var el = document.createElement('div');
@@ -935,6 +949,7 @@ if (!FINAL_MODE) {
   });
   document.getElementById('ts-reset').addEventListener('click', function() {
     if (!confirm('Reset to the original model trained from your answers? This discards your edits.')) return;
+    StudyReview.clear();
     fetch(RESET_URL, {method: 'POST'}).then(function(r){ return r.json(); }).then(function(data){
       if (data && data.redirect) window.location.href = data.redirect;
     });
@@ -967,6 +982,12 @@ if (!FINAL_MODE) {
 }
 
 INITIAL_MODEL_JSON = JSON.stringify(model);
+StudyReview.init({
+  keys: FEATURES_DATA.map(function(x) { return x.key; }), storageKey: 'ts_review_v1', required: !FINAL_MODE && REQUIRE_REVIEW,
+  hint: 'answer the question under each factor',
+  gateText: function(n, total) { return 'Before you lock in, please review each factor (' + n + ' of ' + total + ' done): tell us whether it matches how you decide.'; },
+  gateOnly: true
+});
 refresh();
 </script>
 {% endblock %}

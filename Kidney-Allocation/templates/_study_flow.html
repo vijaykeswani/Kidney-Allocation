@@ -39,6 +39,7 @@ var StudyFlow = (function() {
     });
     $('ts-reset').addEventListener('click', function() {
       if (!confirm('Reset to the original model trained from your answers? This discards your edits.')) return;
+      if (cfg.onReset) cfg.onReset();
       fetch(cfg.resetUrl, {method: 'POST'}).then(function(r) { return r.json(); }).then(function(d) { if (d && d.redirect) window.location.href = d.redirect; });
     });
     var row = $('ts-score-row'), score = cfg.currentScore;
@@ -75,5 +76,64 @@ var StudyFlow = (function() {
     $('ts-match-sub').textContent = sub;
   }
   return {toggleStep: toggleStep, steps: steps, init: init, finalHeader: finalHeader};
+})();
+
+// Review of what the participant has looked at: each item (a factor, or the whole tree) is "approved" (they said it
+// already matches how they decide) or "modified" (they changed it). While `required`, lock-in stays unavailable until
+// every item is one or the other. Kept in sessionStorage so it survives "Apply changes" reloading the page.
+var StudyReview = (function() {
+  'use strict';
+  var cfg = {keys: [], storageKey: 'ts_review', required: false}, state = {}, notes = {};
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
+  function save() { try { sessionStorage.setItem(cfg.storageKey, JSON.stringify(state)); sessionStorage.setItem(cfg.storageKey + '_notes', JSON.stringify(notes)); } catch (e) {} }
+  function count() { return cfg.keys.filter(function(k) { return state[k]; }).length; }
+  function update() {
+    var n = count(), total = cfg.keys.length, txt = $('ts-rp-text'), fill = $('ts-rp-fill');
+    if (txt) txt.textContent = (total === 1 ? (n ? 'Reviewed' : 'Not reviewed yet') : n + ' of ' + total + ' reviewed') + (cfg.hint && n < total ? ' \u2014 ' + cfg.hint : '');
+    if (fill) fill.style.width = (total ? n / total * 100 : 0) + '%';
+    var btn = $('ts-continue'), gate = $('ts-lock-gate'), blocked = cfg.required && n < total;
+    if (btn && cfg.required) btn.disabled = blocked;
+    if (gate) { gate.hidden = !blocked; if (blocked) gate.textContent = cfg.gateText ? cfg.gateText(n, total) : ('Please review all ' + total + ' before locking in your model (' + n + ' done).'); }
+    if (cfg.onChange) cfg.onChange();
+  }
+  function init(c) {
+    cfg = c; state = {}; notes = {};
+    try { state = JSON.parse(sessionStorage.getItem(cfg.storageKey) || '{}') || {}; notes = JSON.parse(sessionStorage.getItem(cfg.storageKey + '_notes') || '{}') || {}; } catch (e) { state = {}; notes = {}; }
+    Object.keys(state).forEach(function(k) { if (cfg.keys.indexOf(k) < 0) delete state[k]; });
+    update();
+  }
+  function get(k) { return state[k] || null; }
+  function setState(k, v) { if (state[k] !== v) { state[k] = v; save(); update(); } }
+  function approve(k) { setState(k, 'approved'); }                       // "this matches how I decide"
+  function flag(k) { setState(k, 'flagged'); }                           // "it doesn't match and I can't fix it with these options"
+  function modified(k) { if (state[k] !== 'flagged') setState(k, 'modified'); }   // changing something counts as a review; it never erases a "can't fix it"
+  function note(k, text) { notes[k] = text; save(); }
+  function clear() { state = {}; notes = {}; save(); update(); }
+  function log(name, detail) { if (typeof logEvent === 'function') logEvent(name, detail); }
+
+  // The question put to the participant for one item (a factor, or the whole tree).
+  function actionsHTML(key, thing) {
+    var st = get(key);
+    var html = '<div class="ts-rv-actions"><div class="ts-rv-question">Does ' + esc(thing) + ' match how you decide?</div><div class="ts-rv-btns">'
+      + '<button type="button" class="ts-rv-btn yes' + (st === 'approved' ? ' active' : '') + '" data-rv="approved">\u2713 Yes, this matches how I decide</button>'
+      + '<button type="button" class="ts-rv-btn no' + (st === 'flagged' ? ' active' : '') + '" data-rv="flagged">\u2717 No, and I can\u2019t fix it with these options</button></div>';
+    if (st === 'modified') html += '<div class="ts-rv-modnote">You changed ' + esc(thing) + '. If it now matches how you decide, you can confirm that above \u2014 or just move on.</div>';
+    if (st === 'flagged') html += '<textarea class="ts-flag-note" rows="2" placeholder="Optional: what does the model get wrong here, or what can\u2019t you express?">' + esc(notes[key] || '') + '</textarea>';
+    return html + '</div>';
+  }
+  function wireActions(root, key, onChange) {
+    root.querySelectorAll('.ts-rv-btn').forEach(function(b) {
+      b.addEventListener('click', function() {
+        if (b.getAttribute('data-rv') === 'approved') { approve(key); log('review_approved', {item: key}); }
+        else { flag(key); log('review_flagged', {item: key}); }
+        if (onChange) onChange();
+      });
+    });
+    var ta = root.querySelector('.ts-flag-note');
+    if (ta) ta.addEventListener('change', function() { note(key, ta.value); log('review_note', {item: key, note: ta.value.slice(0, 1000)}); });
+  }
+  return {init: init, get: get, approve: approve, flag: flag, modified: modified, note: note, clear: clear, count: count,
+          actionsHTML: actionsHTML, wireActions: wireActions, done: function() { return count() === cfg.keys.length; }};
 })();
 </script>

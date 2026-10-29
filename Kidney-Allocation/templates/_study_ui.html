@@ -9,8 +9,9 @@
 {% macro page_header(n_cases) -%}
 <div class="study-header study-ui">
   <h2 class="study-h">We’ve built an AI model from your answers so far.</h2>
-  <p class="study-sub">The model’s goal is to predict the choices you would make in the future, by judging who should get a kidney the same way you would. Follow the steps below to see how it makes its predictions, and use the controls to change anything that doesn’t match how you decide.</p>
-  <p class="study-sub">At the bottom, you will be able to see how your suggested updates would change the model’s predictions on the {{ n_cases }} cases you already provided your answers for. You can also see what the model would predict you would say in new cases you design on your own. Use these panels to determine whether you want to make any further modifications to the model to make it better reflect your decision-making process. When you are satisfied with how well the model reflects your thinking, click “Lock in my model and continue”.</p>
+  <p class="study-live">The current version predicts <b id="ts-intro-x">–</b>/{{ n_cases }} of your previous answers correctly.</p>
+  <p class="study-sub">The goal of this model is to predict the choices you would make in the future, by judging who should get a kidney the same way you would. Follow the steps below to see how it makes its predictions, and use the controls to change anything that doesn’t match how you decide.</p>
+  <p class="study-sub">At the bottom, you can see how your changes would affect the model’s predictions on the {{ n_cases }} cases you already answered, and what it would predict for new cases you design yourself. Use these to decide whether to change the model further. When you are satisfied that it reflects how you think, click “Lock in my model and continue”.</p>
 </div>
 {%- endmacro %}
 
@@ -61,6 +62,7 @@
 {%- endmacro %}
 
 {% macro lock_in() -%}
+<div class="ts-lock-gate study-ui" id="ts-lock-gate" hidden></div>
 <div class="ts-lock-note study-ui">When you continue, your model is <b>locked in</b> and won’t change again. Next you’ll make a few more choices, which test how well it predicts you on cases it has never seen. Any edits you haven’t applied yet are saved first.</div>
 <div class="study-lock-row study-ui">
   <button class="btn btn-primary study-ui" id="ts-continue" type="button">Lock in my model and continue →</button>
