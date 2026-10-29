@@ -140,7 +140,7 @@ def results_view():
 
     version = db.get_model_version(username)
     views = db.get_tutorial_seen_count(username)
-    tutorial_mode = "full" if views == 0 else ("reminder" if views == 2 else "")
+    tutorial_mode = "full" if views <= 1 else ("reminder" if views == 3 else "")
     db.bump_tutorial_seen_count(username)
 
     return render_template(
@@ -167,7 +167,7 @@ def results_view():
         features_json=features.FEATURES_DATA,
         model_version=version,
         trial_count=len(db.list_trials(username, model_version=version)),
-        tutorial_mode="",      # walkthrough off: the feature-list page has none, and both pages should offer the same experience
+        tutorial_mode=tutorial_mode,
         max_new_features=MAX_NEW_FEATURES,
         baseline_matches=baseline_matches,
         final_mode=False, final_edited=False, final_arm="treatment", survey_url="",

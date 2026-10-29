@@ -250,8 +250,9 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
   <div class="ts-step-sub">
     Select a factor on the left to see how the model treats it. {% if not final_mode %}Use the buttons to correct it if needed.{% endif %}
   </div>
-  <div class="ts-legend">
-    <b class="up">↑ Rise</b> = favors the patient &nbsp;·&nbsp; <b class="down">↓ Fall</b> = counts against them &nbsp;·&nbsp; flat = no difference
+  <div class="ts-legend" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span><b class="up">↑ Rise</b> = favors the patient &nbsp;·&nbsp; <b class="down">↓ Fall</b> = counts against them &nbsp;·&nbsp; flat = no difference</span>
+    {% if not final_mode %}<button class="btn-feat-help" id="btn-feat-help" type="button"><span class="btn-feat-help-icon">?</span> How this works</button>{% endif %}
   </div>
   <div class="ts-v2-layout">
     <div class="ts-feat-list" id="ts-feat-list"></div>
@@ -275,6 +276,72 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 {% else %}
 {{ final_continue(survey_url) }}
 {% endif %}
+
+<!-- Tutorial nudge (reminder bar) -->
+<div class="tutorial-nudge study-ui" id="tutorial-nudge">
+  <span id="tutorial-nudge-text">Reminder: you can edit factors in Step 1 and the combining approach in Step 2.</span>
+  <button class="ts-btn" id="tutorial-nudge-open" type="button">Show me how</button>
+</div>
+
+<!-- Spotlight tutorial overlay -->
+<div id="spotlight-cut"></div>
+<div id="spotlight-backdrop"></div>
+<div id="spotlight-tooltip" role="dialog" aria-modal="true" aria-labelledby="spotlight-title">
+  <div class="tutorial-step-count" id="spotlight-step-count">Step 1 of 7</div>
+  <div class="tutorial-title" id="spotlight-title">Title</div>
+  <div class="tutorial-body" id="spotlight-body">Body</div>
+  <div class="tutorial-actions">
+    <div class="tutorial-dots" id="spotlight-dots"></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="ts-btn" id="spotlight-skip" type="button">Skip</button>
+      <button class="btn btn-primary study-ui" id="spotlight-next"
+              style="width:auto;padding:8px 18px;font-size:14px;min-height:auto">Next</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Spotlight tutorial */
+#spotlight-cut {
+  display:none; position:fixed; z-index:490; pointer-events:none; border-radius:10px;
+  box-shadow:0 0 0 9999px rgba(15,23,42,.55);
+  transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease;
+}
+#spotlight-cut.visible { display:block; }
+#spotlight-backdrop { display:none; position:fixed; inset:0; z-index:489; pointer-events:none; }
+#spotlight-backdrop.visible { display:block; }
+#spotlight-tooltip {
+  display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:510; width:310px; background:#fff; border-radius:14px; padding:20px 22px 16px;
+  box-shadow:0 10px 40px rgba(15,23,42,.22);
+}
+#spotlight-tooltip.visible { display:block; }
+.tutorial-step-count { font-size:12.5px; font-weight:700; color:#94a3b8; letter-spacing:.07em; text-transform:uppercase; margin-bottom:8px; }
+.tutorial-title { font-size:1.1rem; font-weight:600; margin-bottom:8px; color:#0f172a; }
+.tutorial-body { font-size:14px; color:#475569; line-height:1.65; }
+.tutorial-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; }
+.tutorial-dots { display:flex; gap:6px; }
+.tutorial-dot { width:7px; height:7px; border-radius:50%; background:#e2e8f0; }
+.tutorial-dot.on { background:#2563eb; }
+/* ? How this works button */
+.btn-feat-help {
+  height:30px; padding:0 12px; border-radius:8px; border:1.5px solid #bfdbfe;
+  background:#eff6ff; color:#1d4ed8; font-size:13px; font-weight:600;
+  cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px;
+}
+.btn-feat-help:hover { background:#e0e7ff; border-color:#2563eb; }
+.btn-feat-help-icon {
+  width:16px; height:16px; border-radius:50%; background:#2563eb; color:#fff;
+  font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;
+}
+/* Tutorial nudge (reminder bar) */
+.tutorial-nudge {
+  display:none; align-items:center; justify-content:space-between; gap:14px;
+  background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8;
+  border-radius:12px; padding:12px 16px; font-size:14px; margin:16px 0 0;
+}
+.tutorial-nudge.visible { display:flex; }
+</style>
 
 <script>
 'use strict';
@@ -1113,7 +1180,16 @@ function renderStepPreviews() {
 }
 
 function toggleStep(n) { StudyFlow.toggleStep(n); }
-StudyFlow.steps();
+var _firstStepOpen = true;
+StudyFlow.steps(function(n) {
+  if (n === 1 && _firstStepOpen && !FINAL_MODE) {
+    _firstStepOpen = false;
+    if (!sessionStorage.getItem('featTutorialSeen')) {
+      sessionStorage.setItem('featTutorialSeen', '1');
+      setTimeout(function() { openTutorial('first_step_open'); }, 400);
+    }
+  }
+});
 
 if (!FINAL_MODE) {
   StudyFlow.init({
@@ -1127,5 +1203,159 @@ if (!FINAL_MODE) {
 INITIAL_MODEL_JSON = JSON.stringify(model);
 refresh();
 if (FINAL_MODE) { toggleStep(1); toggleStep(2); }
+// Auto-expand Step 1 on page load so the model is immediately visible
+if (!FINAL_MODE) StudyFlow.toggleStep(1);
+if (!FINAL_MODE) startTutorial();
+// Pulse the Step 1 header to signal it's interactive
+(function() {
+  var card = document.getElementById('ts-step1-toggle');
+  if (card) {
+    card.classList.add('ts-step-card-pulse');
+    card.addEventListener('animationend', function() { card.classList.remove('ts-step-card-pulse'); }, {once: true});
+  }
+})();
+
+// ── Spotlight tutorial ────────────────────────────────────────────
+var TUTORIAL_SEEN_URL = {{ tutorial_seen_url | tojson }};
+var TUTORIAL_MODE = {{ tutorial_mode | tojson }};
+
+var TUTORIAL_STEPS = [
+  {
+    title: 'Step 1 — click the header to expand or collapse',
+    body:  'The blue “Step 1” card is clickable — tap it any time to hide or show ' +
+           'the factor list. It starts open so you can see and edit your model straight away.',
+    target: '#ts-step1-toggle'
+  },
+  {
+    title: 'Select a factor on the left',
+    body:  'Click any factor in the left list to see how the model currently treats it. ' +
+           'The chart shows how much it helps or hurts a patient as the value rises.',
+    target: '#ts-feat-list'
+  },
+  {
+    title: 'Set the direction',
+    body:  'Choose “↑ Helps them” if more of this factor is better, ' +
+           '“↓ Counts against them” if more is worse, or ' +
+           '“Doesn’t matter” to remove it from the model.',
+    target: '#ts-features'
+  },
+  {
+    title: 'Set the strength',
+    body:  'Use “a little / somewhat / a lot” to control how strongly this factor ' +
+           'influences the final score. The slider lets you set any value in between.',
+    target: '#ts-features'
+  },
+  {
+    title: 'Step 2 — how factors combine',
+    body:  'Click the “Step 2” header to choose how the model weighs all factor scores ' +
+           'together when multiple factors point different ways.',
+    target: '#ts-step2-toggle'
+  },
+  {
+    title: 'Pick your combining approach',
+    body:  '“Add up” — all factors count. “Count factors” — each factor gets one vote. ' +
+           '“Let the most important decide” — only the top factor matters.',
+    target: '#ts-agg'
+  },
+  {
+    title: 'Apply changes',
+    body:  'When you’re happy with your edits, click “Apply changes.” ' +
+           'The match count updates immediately to show how well the revised model fits your past answers.',
+    target: '#ts-apply'
+  }
+];
+
+var _tutorialStep = 0;
+var _tutorialOpenedAt = null;
+
+function _isTutorialVisible(el) {
+  if (!el) return false;
+  var s = window.getComputedStyle(el);
+  if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return false;
+  var r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+}
+function _positionSpotlight(el) {
+  var cut = document.getElementById('spotlight-cut');
+  if (!_isTutorialVisible(el)) { cut.classList.remove('visible'); return; }
+  var r = el.getBoundingClientRect(), pad = r.width < 40 ? 12 : 6;
+  cut.style.top = (r.top - pad) + 'px'; cut.style.left = (r.left - pad) + 'px';
+  cut.style.width = (r.width + pad * 2) + 'px'; cut.style.height = (r.height + pad * 2) + 'px';
+  cut.classList.add('visible');
+}
+function _positionTooltip(el) {
+  var tt = document.getElementById('spotlight-tooltip');
+  var margin = 14, ttW = 310, ttH = 200, vw = window.innerWidth, vh = window.innerHeight;
+  if (!_isTutorialVisible(el)) { tt.style.top = ''; tt.style.left = ''; tt.style.transform = ''; return; }
+  var r = el.getBoundingClientRect();
+  var top = (r.bottom + margin + ttH < vh) ? r.bottom + margin : Math.max(margin, r.top - ttH - margin);
+  var left = Math.max(margin, Math.min(r.left + (r.width - ttW) / 2, vw - ttW - margin));
+  tt.style.transform = 'none'; tt.style.top = Math.max(margin, top) + 'px'; tt.style.left = left + 'px';
+}
+function _updateSpotlightPositions() {
+  if (!document.getElementById('spotlight-tooltip').classList.contains('visible')) return;
+  var s = TUTORIAL_STEPS[_tutorialStep];
+  var el = s && s.target ? document.querySelector(s.target) : null;
+  _positionSpotlight(el); _positionTooltip(el);
+}
+function renderTutorialStep() {
+  var s = TUTORIAL_STEPS[_tutorialStep], total = TUTORIAL_STEPS.length;
+  document.getElementById('spotlight-step-count').textContent = 'Step ' + (_tutorialStep + 1) + ' of ' + total;
+  document.getElementById('spotlight-title').textContent = s.title;
+  document.getElementById('spotlight-body').textContent  = s.body;
+  document.getElementById('spotlight-next').textContent  = _tutorialStep === total - 1 ? 'Got it' : 'Next';
+  var dots = document.getElementById('spotlight-dots'); dots.innerHTML = '';
+  TUTORIAL_STEPS.forEach(function(_, i) {
+    var d = document.createElement('span');
+    d.className = 'tutorial-dot' + (i === _tutorialStep ? ' on' : '');
+    dots.appendChild(d);
+  });
+  var el = s.target ? document.querySelector(s.target) : null;
+  if (el) el.scrollIntoView({block: 'nearest', behavior: 'instant'});
+  _updateSpotlightPositions();
+}
+function openTutorial(via) {
+  _tutorialStep = 0; _tutorialOpenedAt = Date.now();
+  document.getElementById('spotlight-backdrop').classList.add('visible');
+  document.getElementById('spotlight-tooltip').classList.add('visible');
+  renderTutorialStep();
+  logEvent('tutorial_opened', {via: via || 'auto'});
+}
+function closeTutorial(via) {
+  document.getElementById('spotlight-cut').classList.remove('visible');
+  document.getElementById('spotlight-backdrop').classList.remove('visible');
+  document.getElementById('spotlight-tooltip').classList.remove('visible');
+  var duration = _tutorialOpenedAt ? Date.now() - _tutorialOpenedAt : null;
+  fetch(TUTORIAL_SEEN_URL, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode: TUTORIAL_MODE || 'manual', via: via || 'close', duration_ms: duration})
+  }).catch(function() {});
+}
+function startTutorial() {
+  if (TUTORIAL_MODE === 'full') {
+    openTutorial('first_visit');
+  } else if (TUTORIAL_MODE === 'reminder') {
+    var nudge = document.getElementById('tutorial-nudge');
+    if (nudge) { nudge.classList.add('visible'); logEvent('tutorial_reminder_shown', {}); }
+  }
+}
+document.getElementById('spotlight-next').addEventListener('click', function() {
+  if (_tutorialStep < TUTORIAL_STEPS.length - 1) { _tutorialStep++; renderTutorialStep(); }
+  else { closeTutorial('finished'); }
+});
+document.getElementById('spotlight-skip').addEventListener('click', function() { closeTutorial('skipped'); });
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('spotlight-tooltip').classList.contains('visible'))
+    closeTutorial('escape');
+});
+(function() {
+  var bh = document.getElementById('btn-feat-help');
+  if (bh) bh.addEventListener('click', function() { openTutorial('help_button'); });
+  var nu = document.getElementById('tutorial-nudge-open');
+  if (nu) nu.addEventListener('click', function() {
+    document.getElementById('tutorial-nudge').classList.remove('visible'); openTutorial('reminder');
+  });
+})();
+window.addEventListener('scroll', _updateSpotlightPositions, {passive: true});
 </script>
 {% endblock %}

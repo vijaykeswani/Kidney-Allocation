@@ -725,6 +725,28 @@ body { padding: 0; }
 /* same page frame as the feature-list page */
 body { background: #fff; }
 .page-wrap { max-width: 900px; padding: 36px 40px 48px; }
+
+/* ── Always-visible toolbar help button ───────────────────────── */
+.btn-toolbar-help {
+  height: 30px; padding: 0 12px; border-radius: 8px;
+  border: 1.5px solid var(--accent-border); background: var(--accent-soft);
+  color: var(--accent-hover); font-size: var(--fs-sm); font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn-toolbar-help:hover { background: #e0e7ff; border-color: var(--accent); }
+.btn-toolbar-help-icon {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* ── First-node pulse on tree open ───────────────────────────── */
+@keyframes node-pulse {
+  0%, 100% { outline: 3px solid transparent; outline-offset: 3px; }
+  50%       { outline: 3px solid var(--accent); outline-offset: 3px; }
+}
+.fft-node-pulse { animation: node-pulse 0.65s ease 3; }
+.fft-node--first.fft-editing { border-color: var(--accent) !important; border-width: 2px !important; }
 </style>
 </head>
 <body>
@@ -755,11 +777,18 @@ body { background: #fff; }
       <span class="muted" style="font-size: var(--fs-sm);color:var(--text-faint)">
         Reads top to bottom — YES branches left to an outcome, NO continues down.
       </span>
-      <div class="zoom-controls">
-        <button class="zoom-btn" id="zoom-out" type="button" title="Zoom out">−</button>
-        <span class="zoom-level" id="zoom-level">100%</span>
-        <button class="zoom-btn" id="zoom-in" type="button" title="Zoom in">+</button>
-        <button class="zoom-btn wide" id="zoom-fit" type="button" title="Fit the whole tree">Fit</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        {% if not final_mode %}
+        <button class="btn-toolbar-help" id="btn-toolbar-help" type="button">
+          <span class="btn-toolbar-help-icon">?</span> How to edit
+        </button>
+        {% endif %}
+        <div class="zoom-controls">
+          <button class="zoom-btn" id="zoom-out" type="button" title="Zoom out">−</button>
+          <span class="zoom-level" id="zoom-level">100%</span>
+          <button class="zoom-btn" id="zoom-in" type="button" title="Zoom in">+</button>
+          <button class="zoom-btn wide" id="zoom-fit" type="button" title="Fit the whole tree">Fit</button>
+        </div>
       </div>
     </div>
 
@@ -2195,7 +2224,28 @@ window.CaseAdapter = {
 document.getElementById('ts-match-panel').addEventListener('click', function() { CaseOverlay.open(); });
 
 // The tree measures itself, so it must be visible: draw it when the step is opened.
-StudyFlow.steps(function() { zoom = 1; render(); fitZoom(true); });   // reset first: a fit measured while hidden would otherwise stick
+var _firstStepOpen = true;
+StudyFlow.steps(function(n) {
+  zoom = 1; render(); fitZoom(true);   // reset first: a fit measured while hidden would otherwise stick
+  if (n === 1 && _firstStepOpen && !FINAL_MODE) {
+    _firstStepOpen = false;
+    // Pulse the first node briefly so users see it's clickable
+    setTimeout(function() {
+      var first = document.querySelector('.fft-node');
+      if (first) {
+        first.classList.add('fft-node-pulse');
+        first.addEventListener('animationend', function() { first.classList.remove('fft-node-pulse'); }, {once: true});
+      }
+    }, 300);
+    // Auto-trigger the edit tutorial once per session
+    if (!sessionStorage.getItem('editTutorialSeen')) {
+      sessionStorage.setItem('editTutorialSeen', '1');
+      setTimeout(function() { openTutorial('first_step_open', 'edit'); }, 600);
+    }
+  }
+});
+// Auto-expand Step 1 on page load so the tree is immediately visible
+if (!FINAL_MODE) StudyFlow.toggleStep(1, function() { zoom = 1; render(); fitZoom(true); });
 if (!FINAL_MODE) StudyFlow.init({
   applyUrl: APPLY_URL, resetUrl: RESET_URL, rateUrl: RATE_URL, continueUrl: CONTINUE_URL, currentScore: currentScore,
   beforeApply: commitOpenPanels,
@@ -2364,30 +2414,28 @@ document.addEventListener('keydown', _logReactionOnce, {once: true});
 // View-mode tutorial: explains the tree visualisation
 var TUTORIAL_STEPS = [
   {
-    title: 'This is your model',
+    title: 'Step 1 — click the header to expand or collapse',
+    body:  'The blue “Step 1” card above the tree is clickable — tap it any time to ' +
+           'hide or show the tree. It starts open so you can see your model right away.',
+    target: '#ts-step1-toggle'
+  },
+  {
+    title: 'How the tree works',
     body:  'It reads top to bottom. Each box is one check — YES exits left with ' +
            'an immediate answer, NO continues down to the next check.',
     target: '.tree-card'
   },
   {
-    title: 'The bottom box is the fallback',
-    body:  'When no check applies, the model uses the outcome in the “OTHERWISE” ' +
-           'box at the very bottom of the tree.',
-    target: '#default-leaf'
+    title: 'Click any check to edit it',
+    body:  'The tree is always editable. Click any check box to change its factor, ' +
+           'threshold, or outcome. Use “＋ Add decision step” to add a new check.',
+    target: '.tree-card'
   },
   {
-    title: 'Rate then edit',
-    body:  'Rate how well this model matches your thinking (1–7 below). Once ' +
-           'rated, you can click any check to change its factor or threshold, or ' +
-           'add new checks.',
-    target: '#rating-card'
-  },
-  {
-    title: 'Test it against a new scenario',
-    body:  'After rating, use “Test this model” to see a fresh patient pair and ' +
-           'compare your choice with the model\'s prediction. Agreements and ' +
-           'disagreements are saved for review.',
-    target: '#post-rating-row'
+    title: 'Apply, rate, and continue',
+    body:  'After editing, click “Apply changes” to save. Then rate how well the model ' +
+           'matches your thinking (1–7) and click “Lock in my model and continue.”',
+    target: '#ts-apply'
   }
 ];
 
@@ -2430,10 +2478,10 @@ var EDIT_TUTORIAL_STEPS = [
     target: '.fft-badge-move.fft-badge-tr1'
   },
   {
-    title: 'Save your changes',
-    body:  'When you\'re done, click “✓ Done editing” in the toolbar above the tree. ' +
-           'Your changes are saved and the model retrains on your original answers.',
-    target: '#toolbar'
+    title: 'Apply your changes',
+    body:  'When you\'re done editing, scroll down and click “Apply changes.” ' +
+           'Your edits are saved and the match count updates immediately.',
+    target: '#ts-apply'
   }
 ];
 
@@ -2571,6 +2619,10 @@ document.addEventListener('keydown', function (e) {
 document.getElementById('btn-help').addEventListener('click', function () {
   openTutorial('help_button', editing ? 'edit' : 'view');
 });
+(function() {
+  var tb = document.getElementById('btn-toolbar-help');
+  if (tb) tb.addEventListener('click', function() { openTutorial('toolbar_help', 'edit'); });
+})();
 document.getElementById('tutorial-nudge-open').addEventListener('click', function () {
   document.getElementById('tutorial-nudge').classList.remove('visible');
   openTutorial('reminder');
@@ -2657,6 +2709,14 @@ initEditor(
   {{ summary_explanation_json | tojson }}
 );
 if (FINAL_MODE) StudyFlow.toggleStep(1, function() { zoom = 1; render(); fitZoom(true); });   // the final page opens with the model showing
+
+// Pulse the Step 1 header on load to signal it's interactive (fires once, removed after)
+(function() {
+  var card = document.getElementById('ts-step1-toggle');
+  if (!card) return;
+  card.classList.add('ts-step-card-pulse');
+  card.addEventListener('animationend', function() { card.classList.remove('ts-step-card-pulse'); }, {once: true});
+})();
 </script>
 </body>
 </html>

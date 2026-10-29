@@ -5,7 +5,7 @@
 #}
 <style>
 .study-ui { --text:#0f172a; --text-secondary:#475569; --text-muted:#94a3b8; --surface:#f8fafc; --surface-alt:#f1f5f9;
-  --border:#e2e8f0; --border-strong:#cbd5e1; --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff;
+  --border:#e2e8f0; --border-strong:#cbd5e1; --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff; --accent-border:#bfdbfe;
   --patient-a:#0f766e; --patient-a-soft:#d8ecea; --patient-b:#b1622f; --patient-b-soft:#f6e7dd;
   font-family:-apple-system,"Segoe UI",Roboto,sans-serif; }
 .study-ui .btn, .btn.study-ui { font-size:16px; padding:11px 22px; min-height:46px; border-radius:10px; font-weight:500;
@@ -28,17 +28,22 @@
 .study-sep { border:none; border-top:1px solid #e2e8f0; margin:1.5rem 0; }
 .ts-step-card {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--accent-soft); border: 1.5px solid var(--accent-border); border-radius: 12px;
   padding: 18px 22px; margin: 28px 0 0; cursor: pointer; font-family: inherit; text-align: left;
   transition: border-color .12s, background .12s;
 }
-.ts-step-card:hover { border-color: var(--patient-a); background: var(--patient-a-soft); }
+.ts-step-card:hover { border-color: var(--accent); background: #e0e7ff; }
 .ts-step-card.open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
 .ts-step-card-head { flex: 1; }
-.ts-step-title { font-size: 1.25rem; font-weight: 600; font-family: var(--font-serif, serif); margin: 0; }
+.ts-step-title { font-size: 1.25rem; font-weight: 600; font-family: var(--font-serif, serif); margin: 0; color: var(--accent-hover); }
 .ts-step-preview { font-size: 13.5px; color: var(--text-secondary); margin-top: 5px; }
-.ts-step-chevron { font-size: 16px; color: var(--text-muted); transition: transform .15s; flex-shrink: 0; }
+.ts-step-chevron { font-size: 20px; color: var(--accent); transition: transform .15s; flex-shrink: 0; font-weight: 700; }
 .ts-step-chevron.open { transform: rotate(180deg); }
+@keyframes step-card-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,.0); }
+  50%       { box-shadow: 0 0 0 6px rgba(37,99,235,.18); }
+}
+.ts-step-card-pulse { animation: step-card-pulse 0.75s ease 3; }
 .ts-step-body {
   display: none; border: 1px solid var(--border); border-top: none;
   border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;

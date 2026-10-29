@@ -174,7 +174,8 @@
     el.className = 'fft-node' +
       (editing ? ' fft-editing' : '') +
       (sel ? ' fft-selected' : '') +
-      (isRefine ? ' fft-refine' : '');
+      (isRefine ? ' fft-refine' : '') +
+      (!isRefine && n.nodeIndex === 0 ? ' fft-node--first' : '');
     el.style.width = NODE_W + 'px';
     el.setAttribute(isRefine ? 'data-refine' : 'data-node', n.nodeIndex);
 

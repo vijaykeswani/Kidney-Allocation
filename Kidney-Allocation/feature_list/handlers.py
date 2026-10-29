@@ -69,7 +69,7 @@ def results_view(template="twostage.html"):
 
     db.log_event(username, "results_viewed", {"edited": bool(override), "n_part1": len(decisions)})
     views = db.get_tutorial_seen_count(username)
-    tutorial_mode = "full" if views == 0 else ("reminder" if views == 2 else "")
+    tutorial_mode = "full" if views <= 1 else ("reminder" if views == 3 else "")
     db.bump_tutorial_seen_count(username)
 
     return render_template(
