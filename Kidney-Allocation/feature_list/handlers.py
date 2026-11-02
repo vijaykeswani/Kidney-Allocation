@@ -190,4 +190,4 @@ def apply_edit_handler(username, payload):
     db.set_fft_override(username, model)
     version = db.bump_model_version(username)
     db.log_event(username, "model_edit_applied", {"model_version": version, "type": "twostage"})
-    return {"ok": True, "redirect": url_for("results")}, 200
+    return {"ok": True, "model_version": version}, 200

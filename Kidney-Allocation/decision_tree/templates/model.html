@@ -571,7 +571,7 @@ body { padding: 0; }
 .zoom-btn.wide { width: auto; padding: 0 12px; font-size: var(--fs-sm); }
 .zoom-level { font-size: var(--fs-sm); color: var(--text-muted); min-width: 44px; text-align: center; }
 
-#svg-scroll { overflow: auto; max-height: 74vh; padding-bottom: 4px; }
+#svg-scroll { overflow: auto; max-height: 82vh; padding-bottom: 4px; }
 #svg-wrap svg { display: block; }
 
 /* ── Sliders (threshold + scenario values) ─────────────────────── */
@@ -722,9 +722,8 @@ body { padding: 0; }
 </style>
 {% include "_study_ui_css.html" %}
 <style>
-/* same page frame as the feature-list page */
 body { background: #fff; }
-.page-wrap { max-width: 900px; padding: 36px 40px 48px; }
+.page-wrap { max-width: 1440px; padding: 36px 24px 48px; }
 
 /* ── Always-visible toolbar help button ───────────────────────── */
 .btn-toolbar-help {
@@ -752,7 +751,12 @@ body { background: #fff; }
 <body>
 
 <div class="page-wrap">
-  {% if not final_mode %}{{ page_header(past_scenarios_json | length) }}{% else %}{{ match_panel() }}{% endif %}
+  {% if not final_mode %}
+  {{ page_header(past_scenarios_json | length) }}
+  <div id="intro-gate" style="margin-top:24px">
+    <button type="button" class="btn btn-primary" id="btn-intro-continue">Continue to my model →</button>
+  </div>
+  {% else %}{{ match_panel() }}{% endif %}
   {% include "_case_overlay.html" %}
   {% include "_study_flow.html" %}
 
@@ -762,6 +766,8 @@ body { background: #fff; }
     <div class="tutorial-nudge" id="tutorial-nudge"><span id="tutorial-nudge-text"></span><button type="button" id="tutorial-nudge-open"></button></div>
     <button type="button" id="btn-help"></button>
   </div>
+
+  {% if not final_mode %}<div id="model-body" style="display:none">{% endif %}
 
   {% call step(1, "Step 1. Approve or modify the checks the AI applies, in order", open=True) %}
   <div class="ts-step-sub">The AI goes through these checks from top to bottom, and the first one that applies decides the case. {% if not final_mode %}Click any check to change it, or add a new one. When you are done, tell us below whether the tree matches how you decide.{% endif %}</div>
@@ -909,6 +915,7 @@ body { background: #fff; }
   {% else %}
   {{ final_continue(survey_url) }}
   {% endif %}
+  {% if not final_mode %}</div>{% endif %}
 </div>
 
 <!-- ── Tutorial (spotlight walkthrough) ─────────────────────────── -->
@@ -2269,7 +2276,14 @@ if (!FINAL_MODE) StudyFlow.init({
   beforeApply: commitOpenPanels,
   getPayload: function() { return {tree: tree, baseline_node_count: baselineNodeCount}; },
   isDirty: function() { commitOpenPanels(); return JSON.stringify(tree) !== INITIAL_TREE_JSON; },
-  logEvent: logEvent
+  logEvent: logEvent,
+  onApply: function(data) {
+    if (BASELINE_MATCHES === null) BASELINE_MATCHES = _pageLoadMatchCount;
+    INITIAL_TREE_JSON = JSON.stringify(tree);
+    baselineNodeCount = ((tree && tree.nodes) || []).length;
+    document.getElementById('ts-reset').style.display = '';
+    updateMatchCount();
+  },
 });
 
 // ── Scenario audit panel ─────────────────────────────────────────
@@ -2655,6 +2669,30 @@ function startTutorial() {
   }
 }
 
+(function() {
+  var gate = document.getElementById('btn-intro-continue');
+  if (!gate) return;
+  gate.addEventListener('click', function() {
+    document.getElementById('intro-gate').style.display = 'none';
+    var svgScroll = document.getElementById('svg-scroll');
+    svgScroll.style.visibility = 'hidden';  // keep layout, hide pixels
+    document.getElementById('model-body').style.display = '';
+    // Two frames: first lets the browser compute the layout of the
+    // newly-visible container; second lets it flush before we measure.
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        zoom = 1; render(); fitZoom(true);
+        svgScroll.style.visibility = '';    // reveal already at fit zoom
+        if (!sessionStorage.getItem('viewTutorialSeen')) {
+          sessionStorage.setItem('viewTutorialSeen', '1');
+          setTimeout(function() { openTutorial('auto', 'view'); }, 600);
+        }
+      });
+    });
+    logEvent('intro_continued', {});
+  });
+})();
+
 // ── Zoom controls ─────────────────────────────────────────────────
 document.getElementById('zoom-in').addEventListener('click', function () {
   setZoom(zoom + 0.15, 'button');
@@ -2724,6 +2762,9 @@ initEditor(
   {{ node_explanations_json | tojson }},
   {{ summary_explanation_json | tojson }}
 );
+// Capture the unedited model's match count. Used as BASELINE_MATCHES on first apply
+// (when the page loaded without any override, BASELINE_MATCHES is null).
+var _pageLoadMatchCount = auditMatchSummary().matches;
 // Pulse the Step 1 header on load to signal it's interactive (fires once, removed after)
 (function() {
   var card = document.getElementById('ts-step1-toggle');

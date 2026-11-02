@@ -83,10 +83,7 @@
 {% endif %}
 
 <form method="post" action="{{ url_for('do_start') }}">
-  <label for="username"><strong>Your participant ID</strong></label>
-  <div class="muted" style="font-size:13.5px; margin:4px 0 8px;">We have generated an ID for you. You can keep it as it is.</div>
-  <input type="text" name="username" id="username" value="{{ default_name }}" autocomplete="off" spellcheck="false">
-  <div class="spacer-16"></div>
+  <input type="hidden" name="username" value="{{ default_name }}">
   <button type="submit" class="btn btn-primary btn-block">I am ready to start</button>
 </form>
 

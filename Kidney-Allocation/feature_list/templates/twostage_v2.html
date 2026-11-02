@@ -277,6 +277,16 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 .ts-acc-body svg.ts-linechart { max-width: 460px; display: block; margin: 0 auto; }
 .ts-slider-hint { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 10px; }
 @media (max-width: 760px) { .ts-acc-head { grid-template-columns: 1fr 92px; } .ts-wf, .ts-acc-note { display: none; } }
+
+/* ── Next factor button — always blue ─────────────────────────────── */
+#ts-feat-next { background: var(--accent); border-color: var(--accent); color: #fff; }
+#ts-feat-next:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* ── Wider canvas (matches decision tree page at 1440px) ───────────── */
+.wrap { max-width: 1440px; padding: 36px 24px 48px; }
+.study-header { max-width: 860px; }
+.ts-v2-layout { grid-template-columns: 280px 1fr; gap: 28px; }
+.ts-acc-head { grid-template-columns: 250px 1fr 140px 148px; gap: 16px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -1351,11 +1361,18 @@ if (!FINAL_MODE) {
     getPayload: function() { return {model: model}; },
     isDirty: function() { return JSON.stringify(model) !== INITIAL_MODEL_JSON; },
     logEvent: logEvent,
-    onReset: function() { StudyReview.clear(); }
+    onReset: function() { StudyReview.clear(); },
+    onApply: function(data) {
+      if (BASELINE_MATCHES === null) BASELINE_MATCHES = _pageLoadMatchCount;
+      INITIAL_MODEL_JSON = JSON.stringify(model);
+      document.getElementById('ts-reset').style.display = '';
+      renderSummary();
+    },
   });
 }
 
 INITIAL_MODEL_JSON = JSON.stringify(model);
+var _pageLoadMatchCount = matchCount();
 StudyReview.init({
   keys: FEATURES_DATA.map(function(x) { return x.key; }), storageKey: 'ts_review_v2', required: !FINAL_MODE && REQUIRE_REVIEW,
   hint: 'click each factor below to review it',

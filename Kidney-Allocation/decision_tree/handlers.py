@@ -292,7 +292,7 @@ def apply_edit_handler(username, payload):
     version = db.bump_model_version(username)
     db.log_event(username, "model_edit_applied",
                  {"nodes": len(nodes), "model_version": version})
-    return {"ok": True, "redirect": url_for("results")}, 200
+    return {"ok": True, "model_version": version}, 200
 
 
 def review_view():

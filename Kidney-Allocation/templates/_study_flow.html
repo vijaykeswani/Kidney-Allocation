@@ -31,7 +31,11 @@ var StudyFlow = (function() {
       apply.disabled = true; apply.textContent = 'Saving\u2026';
       postApply().then(function(data) {
         if (data && data.redirect) window.location.href = data.redirect;
-        else { apply.disabled = false; apply.textContent = 'Apply changes'; }
+        else {
+          apply.textContent = 'Saved ✓';
+          if (cfg.onApply) cfg.onApply(data);
+          setTimeout(function() { apply.disabled = false; apply.textContent = 'Apply changes'; }, 1500);
+        }
       }).catch(function(err) {
         apply.disabled = false; apply.textContent = (err && err.message) ? err.message : 'Apply changes \u2014 try again';
         setTimeout(function() { apply.textContent = 'Apply changes'; }, 4000);
