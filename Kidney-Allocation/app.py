@@ -19,6 +19,7 @@ Everything specific to a model section lives in its own folder:
 After the model picker, routes dispatch to the appropriate section's handlers.
 """
 
+import functools
 import os
 import random
 import secrets
@@ -28,7 +29,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import pandas as pd
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 
 import db
 import features
@@ -55,6 +56,32 @@ CONTROL_EXTRA_N = PART2_N
 
 MODEL_TYPES = ("fft", "twostage", "twostage_v2", "control")
 DISPLAYABLE_MODEL_TYPES = ("fft", "twostage", "twostage_v2")  # real models control can be shown
+
+# Conditions assigned automatically in rotation order (twostage excluded by design).
+ROTATION_SEQUENCE = ["fft", "twostage_v2", "control"]
+CONDITION_LABELS = {
+    "fft":         "Decision tree",
+    "twostage_v2": "Feature list v2",
+    "twostage":    "Feature list",
+    "control":     "Control",
+}
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
+
+
+def _admin_required(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or auth.password != ADMIN_PASSWORD:
+            return Response(
+                "Admin access required.",
+                401,
+                {"WWW-Authenticate": 'Basic realm="Admin"'},
+            )
+        return f(*args, **kwargs)
+    return decorated
+
 
 db.init_db(FEATURES)
 
@@ -292,12 +319,10 @@ def intro():
 @app.route("/start", methods=["POST"])
 def do_start():
     name = (request.form.get("username") or "").strip()
-    model_type = request.form.get("model_type")
-    if model_type not in MODEL_TYPES:
-        model_type = "fft"
     if len(name) < 2:
         return render_template("start.html", **_intro_context(
-            default_name=name, preselected_model=model_type, error="Enter at least 2 characters to continue."))
+            default_name=name, error="Enter at least 2 characters to continue."))
+    model_type = db.assign_next_condition(ROTATION_SEQUENCE)
     session["username"] = name
     session["model_type"] = model_type
     db.set_model_type(name, model_type)
@@ -623,6 +648,72 @@ def tutorial_seen():
                  {"mode": payload.get("mode"), "via": payload.get("via"),
                   "duration_ms": payload.get("duration_ms")})
     return jsonify({"ok": True})
+
+
+# ── Admin panel ───────────────────────────────────────────────────────────────
+
+@app.route("/admin")
+@_admin_required
+def admin_panel():
+    idx = db.get_rotation_index()
+    override = db.get_rotation_override()
+    next_condition = override if override else ROTATION_SEQUENCE[idx % len(ROTATION_SEQUENCE)]
+    participants = db.list_all_participants()
+    return render_template(
+        "admin.html",
+        rotation_index=idx,
+        override=override,
+        next_condition=next_condition,
+        participants=participants,
+        rotation_sequence=ROTATION_SEQUENCE,
+        condition_labels=CONDITION_LABELS,
+    )
+
+
+@app.route("/admin/set-override", methods=["POST"])
+@_admin_required
+def admin_set_override():
+    condition = request.form.get("condition")
+    if condition in ROTATION_SEQUENCE:
+        db.set_rotation_override(condition)
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/clear-override", methods=["POST"])
+@_admin_required
+def admin_clear_override():
+    db.clear_rotation_override()
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/set-counter", methods=["POST"])
+@_admin_required
+def admin_set_counter():
+    try:
+        n = int(request.form.get("counter", 0))
+        if n >= 0:
+            db.set_rotation_index(n)
+    except (ValueError, TypeError):
+        pass
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/participants")
+@_admin_required
+def admin_participants():
+    return jsonify(db.list_all_participants())
+
+
+@app.route("/admin/analytics-data")
+@_admin_required
+def admin_analytics_data():
+    return jsonify({
+        "accuracy_by_condition": db.analytics_accuracy_by_condition(),
+        "participants":          db.analytics_participants(),
+        "funnel":                db.analytics_funnel(),
+        "edit_types":            db.analytics_edit_types(),
+        "part2_accuracy":        db.analytics_part2_accuracy(),
+    })
 
 
 if __name__ == "__main__":

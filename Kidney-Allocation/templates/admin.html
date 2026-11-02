@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Kidney Allocation Study</title>
+<style>
+  :root { --border: #e2e8f0; --accent: #2563eb; --success: #15803d; --warning: #b45309; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 15px; color: #0f172a; background: #f8fafc; margin: 0; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 1.4rem; }
+  .sub { color: #64748b; font-size: 13px; margin: 0 0 28px; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 14px; font-size: 1rem; color: #334155; }
+  .stat-row { display: flex; gap: 28px; flex-wrap: wrap; margin-bottom: 6px; }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
+  .stat-value { font-size: 1.15rem; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .badge-fft { background: #eff6ff; color: #1d4ed8; }
+  .badge-twostage_v2 { background: #f0fdf4; color: #15803d; }
+  .badge-control { background: #fef9c3; color: #854d0e; }
+  .badge-twostage { background: #fdf4ff; color: #7e22ce; }
+  .badge-override { background: #fef2f2; color: #b91c1c; }
+  .form-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  select, input[type=number] { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  button { padding: 6px 16px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; font-weight: 500; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-neutral { background: #e2e8f0; color: #334155; }
+  .btn-neutral:hover { background: #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; padding: 8px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+  tr:last-child td { border-bottom: none; }
+  .muted { color: #94a3b8; font-size: 12.5px; }
+  .tag-override { background: #fef2f2; color: #991b1b; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+
+<h1>Admin Panel</h1>
+<p class="sub">Kidney Allocation Study &mdash; Condition Rotation Control</p>
+
+<!-- Status card -->
+<div class="card">
+  <h2>Rotation Status</h2>
+  <div class="stat-row">
+    <div class="stat">
+      <span class="stat-label">Counter</span>
+      <span class="stat-value">{{ rotation_index }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Next assignment</span>
+      <span class="stat-value">
+        {% if override %}
+          <span class="badge badge-override">{{ condition_labels.get(override, override) }}</span>
+          <span class="tag-override">override</span>
+        {% else %}
+          <span class="badge badge-{{ next_condition }}">{{ condition_labels.get(next_condition, next_condition) }}</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Rotation sequence</span>
+      <span class="stat-value" style="font-size:0.95rem; font-weight:400;">
+        {% for c in rotation_sequence %}
+          <span class="badge badge-{{ c }}">{{ condition_labels.get(c, c) }}</span>{% if not loop.last %} &rarr; {% endif %}
+        {% endfor %}
+        &rarr; repeat
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Override card -->
+<div class="card">
+  <h2>One-time Override</h2>
+  <p class="muted" style="margin:0 0 10px;">Force the <em>next</em> participant to receive a specific condition. Cleared automatically after use. Does not advance the counter.</p>
+
+  {% if override %}
+  <p>
+    Active override: <strong class="badge badge-override">{{ condition_labels.get(override, override) }}</strong>
+    &nbsp;
+    <form method="post" action="{{ url_for('admin_clear_override') }}" style="display:inline;">
+      <button type="submit" class="btn-danger" style="padding:4px 12px; font-size:13px;">Clear override</button>
+    </form>
+  </p>
+  {% else %}
+  <p class="muted" style="margin:0 0 10px;">No override set.</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('admin_set_override') }}">
+    <div class="form-row">
+      <select name="condition">
+        {% for c in rotation_sequence %}
+        <option value="{{ c }}" {% if c == override %}selected{% endif %}>{{ condition_labels.get(c, c) }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn-primary">Set override</button>
+    </div>
+  </form>
+</div>
+
+<!-- Counter card -->
+<div class="card">
+  <h2>Rotation Counter</h2>
+  <p class="muted" style="margin:0 0 10px;">Change the counter to shift which condition comes next in the cycle. Counter&nbsp;mod&nbsp;3 determines the slot (0=Decision&nbsp;tree, 1=Feature&nbsp;list&nbsp;v2, 2=Control).</p>
+  <form method="post" action="{{ url_for('admin_set_counter') }}">
+    <div class="form-row">
+      <input type="number" name="counter" min="0" value="{{ rotation_index }}" style="width:100px;">
+      <button type="submit" class="btn-neutral">Set counter</button>
+    </div>
+  </form>
+</div>
+
+<!-- Participants card -->
+<div class="card">
+  <h2>Participants ({{ participants | length }} total)</h2>
+  {% if participants %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Participant ID</th>
+        <th>Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in participants %}
+      <tr>
+        <td class="muted">{{ loop.index }}</td>
+        <td>{{ p.username }}</td>
+        <td><span class="badge badge-{{ p.model_type }}">{{ condition_labels.get(p.model_type, p.model_type) }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No participants yet.</p>
+  {% endif %}
+</div>
+
+<!-- ── Analytics ──────────────────────────────────────────────────────── -->
+<h2 style="margin:32px 0 6px; font-size:1.15rem; color:#334155;">Analytics</h2>
+<p style="margin:0 0 18px; font-size:13px; color:#64748b;">
+  Data refreshes on page reload. Charts appear once participants have completed the model stage.
+</p>
+
+<div id="analytics-loading" style="color:#64748b; font-size:13.5px; margin-bottom:16px;">Loading analytics…</div>
+<div id="analytics-error"  style="display:none; color:#dc2626; font-size:13.5px; margin-bottom:16px;"></div>
+
+<div class="charts-grid">
+  <!-- Row 1 -->
+  <div class="card chart-card">
+    <h2>Pre-edit vs Post-edit Accuracy</h2>
+    <p class="chart-sub">Part-1 accuracy before and after the participant edited their model (% of 20 scenarios matched).</p>
+    <div class="chart-wrap"><canvas id="chartAccuracy"></canvas></div>
+    <div class="no-data" id="ndAccuracy">No participants have reached the model stage yet.</div>
+  </div>
+  <div class="card chart-card">
+    <h2>Part-2 Hold-out Accuracy</h2>
+    <p class="chart-sub">How well the locked model predicted new decisions the participant hadn't seen (% agreement).</p>
+    <div class="chart-wrap"><canvas id="chartPart2"></canvas></div>
+    <div class="no-data" id="ndPart2">No Part-2 trial data yet.</div>
+  </div>
+
+  <!-- Row 2 -->
+  <div class="card chart-card">
+    <h2>Edit Count vs Accuracy Improvement</h2>
+    <p class="chart-sub">Each point is one participant. Did more edits lead to greater improvement?</p>
+    <div class="chart-wrap"><canvas id="chartScatter"></canvas></div>
+    <div class="no-data" id="ndScatter">No participants have completed editing yet.</div>
+  </div>
+  <div class="card chart-card">
+    <h2>Edit Type Breakdown</h2>
+    <p class="chart-sub">Types of model edits logged per condition.</p>
+    <div class="chart-wrap"><canvas id="chartEditTypes"></canvas></div>
+    <div class="no-data" id="ndEditTypes">No edit events logged yet.</div>
+  </div>
+
+  <!-- Row 3 — full width -->
+  <div class="card chart-card chart-card-wide">
+    <h2>Completion Funnel</h2>
+    <p class="chart-sub">How many participants reached each stage, per condition.</p>
+    <div class="chart-wrap chart-wrap-short"><canvas id="chartFunnel"></canvas></div>
+    <div class="no-data" id="ndFunnel">No participants yet.</div>
+  </div>
+</div>
+
+<style>
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.chart-card { padding: 18px 20px; }
+.chart-card-wide { grid-column: 1 / -1; }
+.chart-wrap { position: relative; height: 260px; }
+.chart-wrap-short { height: 200px; }
+.chart-sub { margin: -6px 0 14px; font-size: 12.5px; color: #64748b; }
+.no-data { display: none; font-size: 13px; color: #94a3b8; text-align: center; padding: 40px 0; }
+@media (max-width: 700px) { .charts-grid { grid-template-columns: 1fr; } .chart-card-wide { grid-column: 1; } }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+const COND_LABEL = { fft:'Decision tree', twostage_v2:'Feature list v2', twostage:'Feature list', control:'Control' };
+const COND_COLOR = { fft:'#2563eb', twostage_v2:'#15803d', twostage:'#7e22ce', control:'#b45309' };
+const COND_COLOR_LIGHT = { fft:'#bfdbfe', twostage_v2:'#bbf7d0', twostage:'#e9d5ff', control:'#fde68a' };
+const EVENT_LABEL = {
+  model_edit_applied: 'Edit applied', model_reset: 'Reset',
+  threshold_changed: 'Threshold', step_deleted: 'Step deleted', outcome_changed: 'Outcome changed'
+};
+const EVENT_COLOR = ['#2563eb','#15803d','#b45309','#7e22ce','#64748b'];
+
+function showNoData(id) {
+  document.getElementById(id).style.display = 'block';
+}
+function hideNoData(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+async function loadAnalytics() {
+  const loadEl  = document.getElementById('analytics-loading');
+  const errorEl = document.getElementById('analytics-error');
+  try {
+    const res = await fetch('/admin/analytics-data', { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    loadEl.style.display = 'none';
+    renderAccuracy(d.accuracy_by_condition);
+    renderPart2(d.part2_accuracy);
+    renderScatter(d.participants);
+    renderEditTypes(d.edit_types);
+    renderFunnel(d.funnel);
+  } catch (e) {
+    loadEl.style.display = 'none';
+    errorEl.style.display = 'block';
+    errorEl.textContent = 'Could not load analytics: ' + e.message;
+  }
+}
+
+/* 1 — Pre/post accuracy grouped bar */
+function renderAccuracy(rows) {
+  if (!rows.length) { showNoData('ndAccuracy'); return; }
+  hideNoData('ndAccuracy');
+  const labels = rows.map(r => COND_LABEL[r.model_type] || r.model_type);
+  new Chart(document.getElementById('chartAccuracy'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Before editing', data: rows.map(r => r.avg_before),
+          backgroundColor: rows.map(r => COND_COLOR_LIGHT[r.model_type] || '#e2e8f0'), borderRadius: 4 },
+        { label: 'After editing',  data: rows.map(r => r.avg_after),
+          backgroundColor: rows.map(r => COND_COLOR[r.model_type]       || '#94a3b8'), borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` } } },
+      scales: { y: { min: 0, max: 100, title: { display: true, text: 'Accuracy (%)' } } }
+    }
+  });
+}
+
+/* 2 — Part-2 hold-out bar */
+function renderPart2(rows) {
+  if (!rows.length) { showNoData('ndPart2'); return; }
+  hideNoData('ndPart2');
+  const labels = rows.map(r => COND_LABEL[r.model_type] || r.model_type);
+  new Chart(document.getElementById('chartPart2'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Hold-out agreement (%)',
+        data: rows.map(r => r.avg_agreement),
+        backgroundColor: rows.map(r => COND_COLOR[r.model_type] || '#94a3b8'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y}%  (n=${rows[ctx.dataIndex].n_trials} trials)` } } },
+      scales: { y: { min: 0, max: 100, title: { display: true, text: 'Agreement (%)' } } }
+    }
+  });
+}
+
+/* 3 — Scatter: edit count vs improvement */
+function renderScatter(rows) {
+  const pts = rows.filter(r => r.edit_count !== null);
+  if (!pts.length) { showNoData('ndScatter'); return; }
+  hideNoData('ndScatter');
+  const conditions = [...new Set(pts.map(r => r.model_type))];
+  const datasets = conditions.map(c => ({
+    label: COND_LABEL[c] || c,
+    data: pts.filter(r => r.model_type === c).map(r => ({ x: r.edit_count, y: r.improvement })),
+    backgroundColor: COND_COLOR[c] || '#94a3b8',
+    pointRadius: 6, pointHoverRadius: 8,
+  }));
+  new Chart(document.getElementById('chartScatter'), {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        x: { title: { display: true, text: 'Number of edits applied' } },
+        y: { title: { display: true, text: 'Accuracy improvement (pp)' } }
+      }
+    }
+  });
+}
+
+/* 4 — Edit type stacked bar */
+function renderEditTypes(rows) {
+  if (!rows.length) { showNoData('ndEditTypes'); return; }
+  hideNoData('ndEditTypes');
+  const conditions = [...new Set(rows.map(r => r.model_type))];
+  const events     = [...new Set(rows.map(r => r.event))];
+  const lookup = {};
+  rows.forEach(r => { lookup[`${r.model_type}__${r.event}`] = r.n; });
+  const datasets = events.map((ev, i) => ({
+    label: EVENT_LABEL[ev] || ev,
+    data: conditions.map(c => lookup[`${c}__${ev}`] || 0),
+    backgroundColor: EVENT_COLOR[i % EVENT_COLOR.length],
+    borderRadius: 2,
+  }));
+  new Chart(document.getElementById('chartEditTypes'), {
+    type: 'bar',
+    data: { labels: conditions.map(c => COND_LABEL[c] || c), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Event count' } } }
+    }
+  });
+}
+
+/* 5 — Funnel horizontal stacked bar */
+function renderFunnel(rows) {
+  if (!rows.length) { showNoData('ndFunnel'); return; }
+  hideNoData('ndFunnel');
+  const labels = rows.map(r => COND_LABEL[r.model_type] || r.model_type);
+  const stages = [
+    { key: 'total',       label: 'Signed up',         color: '#e2e8f0' },
+    { key: 'done_p1',     label: 'Completed Part 1',  color: '#bfdbfe' },
+    { key: 'saw_model',   label: 'Saw model',         color: '#93c5fd' },
+    { key: 'done_p2',     label: 'Completed Part 2',  color: '#3b82f6' },
+    { key: 'done_survey', label: 'Completed survey',  color: '#1d4ed8' },
+  ];
+  const datasets = stages.map(s => ({
+    label: s.label,
+    data: rows.map(r => r[s.key]),
+    backgroundColor: s.color,
+    borderRadius: 2,
+  }));
+  new Chart(document.getElementById('chartFunnel'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { x: { stacked: true, title: { display: true, text: 'Participants' } }, y: { stacked: true } }
+    }
+  });
+}
+
+loadAnalytics();
+</script>
+
+</body>
+</html>

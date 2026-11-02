@@ -284,8 +284,16 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 
 {% if not final_mode %}{{ page_header(past_scenarios_json | length) }}{% else %}{{ match_panel() }}{% endif %}
 
+{% if not final_mode %}
+<div id="ts-intro-continue-wrap" class="study-ui" style="margin-top:24px;">
+  <button class="btn btn-primary" id="ts-intro-continue" type="button">Continue →</button>
+</div>
+{% endif %}
+
 {% include "_case_overlay.html" %}
 {% include "_study_flow.html" %}
+
+<div id="ts-main-content" {% if not final_mode %}hidden{% endif %}>
 
 {% call step(1, "Step 1. Approve or modify which factors matter, and by how much", open=True) %}
   <div class="ts-step-sub">
@@ -316,6 +324,8 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 {% else %}
 {{ final_continue(survey_url) }}
 {% endif %}
+
+</div><!-- end #ts-main-content -->
 
 <!-- Tutorial nudge (reminder bar) -->
 <div class="tutorial-nudge study-ui" id="tutorial-nudge">
@@ -1491,7 +1501,9 @@ function closeTutorial(via) {
   }).catch(function() {});
 }
 function startTutorial() {
-  if (TUTORIAL_MODE === 'reminder') {      // never opens by itself: it would cover the introduction. "How this works" opens it.
+  if (TUTORIAL_MODE === 'full') {
+    openTutorial('auto');
+  } else if (TUTORIAL_MODE === 'reminder') {
     var nudge = document.getElementById('tutorial-nudge');
     if (nudge) { nudge.classList.add('visible'); logEvent('tutorial_reminder_shown', {}); }
   }
@@ -1514,6 +1526,12 @@ document.addEventListener('keydown', function(e) {
   });
 })();
 window.addEventListener('scroll', _updateSpotlightPositions, {passive: true});
-if (!FINAL_MODE) startTutorial();   // must run after TUTORIAL_MODE and the tutorial code above are defined
+if (!FINAL_MODE) {
+  document.getElementById('ts-intro-continue').addEventListener('click', function() {
+    document.getElementById('ts-intro-continue-wrap').style.display = 'none';
+    document.getElementById('ts-main-content').removeAttribute('hidden');
+    startTutorial();
+  });
+}
 </script>
 {% endblock %}

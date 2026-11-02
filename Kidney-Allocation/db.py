@@ -169,9 +169,15 @@ def init_db(features):
 
         CREATE INDEX IF NOT EXISTS idx_ui_events_user
             ON ui_events(username, id);
+
+        CREATE TABLE IF NOT EXISTS global_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
         """)
 
     _add_missing_columns()
+    _backfill_frozen_model_columns()
     _migrate_legacy_json()
 
 
@@ -201,7 +207,34 @@ _ADDED_USER_COLUMNS = [
     # The order this participant sees the factors in, for the whole study (JSON list of feature keys).
     # Counterbalanced across participants — see feature_order.py.
     ("feature_order",       "TEXT"),
+    # Accuracy metrics extracted from frozen_model_json for direct SQL querying.
+    ("matches_before_edit", "REAL"),
+    ("matches_at_lock",     "REAL"),
+    ("n_part1",             "INTEGER"),
+    ("edit_count",          "INTEGER"),
+    ("model_edited",        "INTEGER"),  # 0/1 bool
 ]
+
+
+def _backfill_frozen_model_columns():
+    """Populate the extracted accuracy columns for rows that pre-date them."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT username, frozen_model_json FROM users "
+            "WHERE frozen_model_json IS NOT NULL AND matches_before_edit IS NULL"
+        ).fetchall()
+        for row in rows:
+            try:
+                d = json.loads(row["frozen_model_json"])
+            except Exception:
+                continue
+            conn.execute(
+                "UPDATE users SET matches_before_edit=?, matches_at_lock=?, "
+                "n_part1=?, edit_count=?, model_edited=? WHERE username=?",
+                (d.get("matches_before_edit"), d.get("matches_at_lock"),
+                 d.get("n_part1"), d.get("edit_count"),
+                 1 if d.get("edited") else 0, row["username"]),
+            )
 
 
 def _add_missing_columns():
@@ -440,6 +473,13 @@ def set_frozen_model(username, frozen):
             "INSERT INTO users (username, frozen_model_json) VALUES (?, ?) "
             "ON CONFLICT(username) DO UPDATE SET frozen_model_json = excluded.frozen_model_json",
             (username, json.dumps(frozen)),
+        )
+        conn.execute(
+            "UPDATE users SET matches_before_edit=?, matches_at_lock=?, "
+            "n_part1=?, edit_count=?, model_edited=? WHERE username=?",
+            (frozen.get("matches_before_edit"), frozen.get("matches_at_lock"),
+             frozen.get("n_part1"), frozen.get("edit_count"),
+             1 if frozen.get("edited") else 0, username),
         )
 
 
@@ -702,3 +742,169 @@ def list_events(username, limit=500):
                 "SELECT * FROM ui_events WHERE username=? ORDER BY id DESC LIMIT ?",
                 (username, int(limit)))
         ]
+
+
+# ── analytics queries ─────────────────────────────────────────────────────────
+
+def analytics_accuracy_by_condition():
+    """Average pre-edit and post-edit accuracy, grouped by condition."""
+    with _connect() as conn:
+        rows = conn.execute("""
+            SELECT model_type,
+                   COUNT(*) AS n,
+                   ROUND(AVG(matches_before_edit * 100.0 / n_part1), 1) AS avg_before,
+                   ROUND(AVG(matches_at_lock     * 100.0 / n_part1), 1) AS avg_after
+            FROM users
+            WHERE n_part1 > 0
+            GROUP BY model_type
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def analytics_participants():
+    """Per-participant accuracy and edit data for scatter/table views."""
+    with _connect() as conn:
+        rows = conn.execute("""
+            SELECT username, model_type,
+                   ROUND(matches_before_edit * 100.0 / n_part1, 1) AS pct_before,
+                   ROUND(matches_at_lock     * 100.0 / n_part1, 1) AS pct_after,
+                   ROUND((matches_at_lock - matches_before_edit) * 100.0 / n_part1, 1) AS improvement,
+                   edit_count,
+                   model_edited
+            FROM users
+            WHERE n_part1 > 0
+            ORDER BY model_type, username
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def analytics_funnel():
+    """Completion funnel counts per condition."""
+    with _connect() as conn:
+        rows = conn.execute("""
+            SELECT model_type,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN part1_index >= 20 THEN 1 ELSE 0 END) AS done_p1,
+                   SUM(CASE WHEN frozen_model_json IS NOT NULL THEN 1 ELSE 0 END) AS saw_model,
+                   SUM(CASE WHEN part2_index >= 10 THEN 1 ELSE 0 END) AS done_p2,
+                   SUM(CASE WHEN survey_json IS NOT NULL THEN 1 ELSE 0 END) AS done_survey
+            FROM users
+            GROUP BY model_type
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def analytics_edit_types():
+    """Count of each edit-related ui_event, joined to users for condition label."""
+    with _connect() as conn:
+        rows = conn.execute("""
+            SELECT u.model_type, e.event, COUNT(*) AS n
+            FROM ui_events e
+            JOIN users u ON e.username = u.username
+            WHERE e.event IN (
+                'model_edit_applied', 'model_reset',
+                'threshold_changed', 'step_deleted', 'outcome_changed'
+            )
+            GROUP BY u.model_type, e.event
+            ORDER BY u.model_type, e.event
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def analytics_part2_accuracy():
+    """Average Part-2 hold-out agreement rate per condition (from trials table)."""
+    with _connect() as conn:
+        rows = conn.execute("""
+            SELECT u.model_type,
+                   COUNT(*) AS n_trials,
+                   ROUND(AVG(t.agreed) * 100.0, 1) AS avg_agreement
+            FROM trials t
+            JOIN users u ON t.username = u.username
+            WHERE t.user_choice IS NOT NULL
+            GROUP BY u.model_type
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── rotation counter & admin override ────────────────────────────────────────
+
+def _get_setting(key, default=None):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT value FROM global_settings WHERE key=?", (key,)
+        ).fetchone()
+    return row["value"] if row else default
+
+
+def _set_setting(key, value):
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO global_settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
+        )
+
+
+def _delete_setting(key):
+    with _connect() as conn:
+        conn.execute("DELETE FROM global_settings WHERE key=?", (key,))
+
+
+def get_rotation_index():
+    try:
+        return int(_get_setting("rotation_index", "0"))
+    except (ValueError, TypeError):
+        return 0
+
+
+def set_rotation_index(n):
+    _set_setting("rotation_index", int(n))
+
+
+def get_rotation_override():
+    return _get_setting("rotation_override")
+
+
+def set_rotation_override(condition):
+    _set_setting("rotation_override", condition)
+
+
+def clear_rotation_override():
+    _delete_setting("rotation_override")
+
+
+def assign_next_condition(sequence):
+    """
+    Atomically assign the next condition. If a one-time override is set, uses it
+    and clears it. Otherwise uses sequence[index % len(sequence)] and increments
+    the index. Returns the assigned condition string.
+    """
+    with _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT value FROM global_settings WHERE key='rotation_override'"
+        ).fetchone()
+        if row:
+            condition = row["value"]
+            conn.execute("DELETE FROM global_settings WHERE key='rotation_override'")
+        else:
+            idx_row = conn.execute(
+                "SELECT value FROM global_settings WHERE key='rotation_index'"
+            ).fetchone()
+            idx = int(idx_row["value"]) if idx_row else 0
+            condition = sequence[idx % len(sequence)]
+            conn.execute(
+                "INSERT INTO global_settings (key, value) VALUES ('rotation_index', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (str(idx + 1),),
+            )
+    return condition
+
+
+def list_all_participants():
+    """All participants ordered newest-first, for the admin panel."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT username, model_type FROM users ORDER BY rowid DESC"
+        ).fetchall()
+    return [{"username": r["username"], "model_type": r["model_type"]} for r in rows]

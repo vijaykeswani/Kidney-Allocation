@@ -83,42 +83,6 @@
 {% endif %}
 
 <form method="post" action="{{ url_for('do_start') }}">
-  {% if preselected_model %}
-  <input type="hidden" name="model_type" value="{{ preselected_model }}">
-  {% else %}
-  <strong>Which version would you like to try?</strong>
-  <div style="height:8px"></div>
-  <p class="muted" style="font-size:13.5px; margin:0 0 14px;">
-    After the first twenty scenarios, what happens next depends on which version you pick below.
-  </p>
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:22px;">
-    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
-      <input type="radio" name="model_type" value="fft" checked> <strong>Decision tree</strong>
-      <div class="muted" style="font-size:13.5px; margin-top:4px;">
-        You'll see an AI model of your choices as an ordered checklist, and can review and edit it.
-      </div>
-    </label>
-    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
-      <input type="radio" name="model_type" value="twostage"> <strong>Feature list</strong>
-      <div class="muted" style="font-size:13.5px; margin-top:4px;">
-        You'll see an AI model that weighs every factor on its own, and can review and edit it.
-      </div>
-    </label>
-    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
-      <input type="radio" name="model_type" value="twostage_v2"> <strong>Feature list v2</strong>
-      <div class="muted" style="font-size:13.5px; margin-top:4px;">
-        Same AI model as Feature list, shown and edited one factor at a time.
-      </div>
-    </label>
-    <label style="border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;">
-      <input type="radio" name="model_type" value="control"> <strong>Control</strong>
-      <div class="muted" style="font-size:13.5px; margin-top:4px;">
-        You won't see or edit an AI model during the study — you'll answer some additional scenarios instead, and see the AI model at the end.
-      </div>
-    </label>
-  </div>
-  {% endif %}
-
   <label for="username"><strong>Your participant ID</strong></label>
   <div class="muted" style="font-size:13.5px; margin:4px 0 8px;">We have generated an ID for you. You can keep it as it is.</div>
   <input type="text" name="username" id="username" value="{{ default_name }}" autocomplete="off" spellcheck="false">
