@@ -754,7 +754,7 @@ body { background: #fff; }
   {% if not final_mode %}
   {{ page_header(past_scenarios_json | length) }}
   <div id="intro-gate" style="margin-top:24px">
-    <button type="button" class="btn btn-primary" id="btn-intro-continue">Continue to my model →</button>
+    <button type="button" class="btn-continue" id="btn-intro-continue">Continue to my model →</button>
   </div>
   {% else %}{{ match_panel() }}{% endif %}
   {% include "_case_overlay.html" %}

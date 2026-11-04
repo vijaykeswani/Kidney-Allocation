@@ -19,17 +19,21 @@ Everything specific to a model section lives in its own folder:
 After the model picker, routes dispatch to the appropriate section's handlers.
 """
 
+import csv as _csv
 import functools
+import io
 import os
 import random
 import secrets
+import sqlite3 as _sqlite3
+import zipfile
 from datetime import datetime
 
 from dotenv import load_dotenv
 load_dotenv()
 
 import pandas as pd
-from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, session, url_for
 
 import db
 import features
@@ -714,6 +718,121 @@ def admin_analytics_data():
         "edit_types":            db.analytics_edit_types(),
         "part2_accuracy":        db.analytics_part2_accuracy(),
     })
+
+
+def _build_participant_summary_csv(conn, stamp):
+    """Return a CSV string with one row per participant (adapted from scripts/export_data.py)."""
+    import json as _json
+    events = {}
+    for r in conn.execute("SELECT username, timestamp, event FROM ui_events ORDER BY id"):
+        events.setdefault(r["username"], []).append((r["timestamp"], r["event"]))
+
+    def _secs(a, b):
+        try:
+            return round((datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds(), 1)
+        except Exception:
+            return None
+
+    rows, survey_cols = [], []
+    for u in conn.execute("SELECT * FROM users ORDER BY username"):
+        keys = u.keys()
+        get = lambda k, _u=u: _u[k] if k in keys else None
+        frozen = _json.loads(get("frozen_model_json")) if get("frozen_model_json") else {}
+        survey = _json.loads(get("survey_json")) if get("survey_json") else {}
+        ev = events.get(u["username"], [])
+        count = lambda e, _ev=ev: sum(1 for _, x in _ev if x == e)
+        first = lambda e, _ev=ev: next((t for t, x in _ev if x == e), None)
+        hold = frozen.get("holdout", {})
+        fo = get("feature_order")
+        row = {
+            "username": u["username"],
+            "model_type": get("model_type"),
+            "display_model_type": get("display_model_type"),
+            "feature_order": " > ".join(_json.loads(fo)) if fo else None,
+            "arm": frozen.get("arm"),
+            "alignment_score": get("alignment_score"),
+            "model_edited": frozen.get("edited"),
+            "edits_applied": frozen.get("edit_count"),
+            "n_part1": frozen.get("n_part1"),
+            "part1_matches_before_edit": frozen.get("matches_before_edit"),
+            "part1_matches_at_lock": frozen.get("matches_at_lock"),
+            "holdout_n": hold.get("n"),
+            "holdout_matches": hold.get("matches"),
+            "holdout_matches_if_unedited": hold.get("matches_if_unedited"),
+            "model_edit_events": count("model_edit"),
+            "test_model_opened": count("test_model_opened"),
+            "cases_viewed": count("case_viewed"),
+            "custom_scenarios_tried": count("custom_scenario_tried"),
+            "results_viewed_at": first("results_viewed"),
+            "model_locked_at": first("model_locked"),
+            "final_viewed_at": first("final_viewed"),
+            "survey_submitted_at": first("survey_submitted"),
+        }
+        row["secs_on_model_screen"] = _secs(row["results_viewed_at"], row["model_locked_at"]) if row["results_viewed_at"] else None
+        row["secs_locked_to_final"] = _secs(row["model_locked_at"], row["final_viewed_at"])
+        for k, v in survey.items():
+            if isinstance(v, dict):
+                for kk, vv in v.items():
+                    row[f"survey_{k}__{kk}"] = vv
+                    survey_cols.append(f"survey_{k}__{kk}")
+            else:
+                row[f"survey_{k}"] = v
+                survey_cols.append(f"survey_{k}")
+        rows.append(row)
+
+    if not rows:
+        return ""
+    base_cols = [k for k in rows[0] if not k.startswith("survey_")]
+    cols = base_cols + sorted(set(survey_cols))
+    sbuf = io.StringIO()
+    w = _csv.DictWriter(sbuf, fieldnames=cols, extrasaction="ignore")
+    w.writeheader()
+    w.writerows(rows)
+    return sbuf.getvalue()
+
+
+@app.route("/admin/export-csv")
+@_admin_required
+def admin_export_csv():
+    """Download all tables as a timestamped zip of CSV files."""
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    conn = _sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True)
+    conn.row_factory = _sqlite3.Row
+    tables = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for table in tables:
+            table_rows = conn.execute(f"SELECT * FROM [{table}]").fetchall()
+            sbuf = io.StringIO()
+            w = _csv.writer(sbuf)
+            if table_rows:
+                w.writerow(table_rows[0].keys())
+                w.writerows(table_rows)
+            zf.writestr(f"{table}_{stamp}.csv", sbuf.getvalue())
+        summary = _build_participant_summary_csv(conn, stamp)
+        if summary:
+            zf.writestr(f"participant_summary_{stamp}.csv", summary)
+    conn.close()
+    buf.seek(0)
+    return Response(
+        buf,
+        mimetype="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=study_data_{stamp}.zip"},
+    )
+
+
+@app.route("/admin/download-db")
+@_admin_required
+def admin_download_db():
+    """Download the raw SQLite database file."""
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return send_file(
+        db.DB_PATH,
+        as_attachment=True,
+        download_name=f"portal_{stamp}.db",
+        mimetype="application/x-sqlite3",
+    )
 
 
 if __name__ == "__main__":

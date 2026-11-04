@@ -143,6 +143,20 @@
   {% endif %}
 </div>
 
+<!-- ── Data Export ────────────────────────────────────────────────────── -->
+<div class="card">
+  <h2>Data Export</h2>
+  <p class="muted" style="margin:0 0 14px;">Download participant data at any time. Both files reflect the live database.</p>
+  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+    <a href="{{ url_for('admin_export_csv') }}" class="btn btn-primary" style="text-decoration:none; padding:8px 18px; border-radius:6px; background:#2563eb; color:#fff; font-size:14px; font-weight:500;">
+      &#8659; Download all data (CSV zip)
+    </a>
+    <a href="{{ url_for('admin_download_db') }}" class="btn btn-neutral" style="text-decoration:none; padding:8px 18px; border-radius:6px; background:#e2e8f0; color:#334155; font-size:14px; font-weight:500;">
+      &#8659; Download raw database (.db)
+    </a>
+  </div>
+</div>
+
 <!-- ── Analytics ──────────────────────────────────────────────────────── -->
 <h2 style="margin:32px 0 6px; font-size:1.15rem; color:#334155;">Analytics</h2>
 <p style="margin:0 0 18px; font-size:13px; color:#64748b;">
