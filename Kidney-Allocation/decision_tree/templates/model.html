@@ -1,4 +1,4 @@
-{% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue %}
+{% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue, stepper, screen, step_nav, guide_offer %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,14 +66,14 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 .fft-node {
-  background: var(--surface); border: 1.2px solid var(--border); border-radius: 11px; padding: 10px 14px;
+  background: var(--surface); border: 1.2px solid var(--border); border-radius: 11px; padding: 14px 18px;
 }
 .fft-node.fft-editing { border-color: var(--accent); border-width: 1.6px; cursor: pointer; }
 .fft-node.fft-selected { border-color: var(--accent); border-width: 2.5px; }
 .fft-node.fft-refine { border-style: dashed; }
 .fft-node.fft-refine.fft-editing { border-width: 1.6px; }
 .fft-eyebrow {
-  font-size: var(--fs-xs); color: var(--text-faint); font-weight: 700; letter-spacing: .06em; margin-bottom: 6px;
+  font-size: var(--fs-sm); color: var(--text-faint); font-weight: 700; letter-spacing: .06em; margin-bottom: 8px;
 }
 .fft-caption { font-size: var(--fs-sm); color: var(--text-primary); font-weight: 600; margin: 0 0 4px; line-height: 1.4; }
 .fft-cond { font-size: var(--fs-sm); color: var(--text-secondary); font-family: monospace; margin: 0; line-height: 1.45; }
@@ -81,11 +81,11 @@ body {
 
 .fft-leaf {
   border-radius: 10px; border: 1.4px solid; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; text-align: center; padding: 8px 10px; min-height: 46px;
+  align-items: center; justify-content: center; text-align: center; padding: 10px 8px; min-height: 60px;
 }
 .fft-leaf.fft-editing { border-width: 1.8px; border-style: dashed; cursor: pointer; }
-.fft-leaf-eyebrow { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .06em; opacity: .75; margin-bottom: 2px; }
-.fft-leaf-label { font-size: var(--fs-sm); font-weight: 700; line-height: 1.3; }
+.fft-leaf-eyebrow { font-size: var(--fs-sm); font-weight: 700; letter-spacing: .06em; opacity: .75; margin-bottom: 3px; }
+.fft-leaf-label { font-size: var(--fs-md); font-weight: 700; line-height: 1.3; }
 
 .fft-badge {
   position: absolute; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -719,11 +719,27 @@ body { padding: 0; }
 .why-steps li.skipped { color: var(--text-muted); }
 .why-steps li.applies { color: var(--text); font-weight: 500; }
 .why-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; }
+/* rules written as sentences: blue text with a small triangle marks what can be changed (no boxes) */
+.fft-rule { font-size: 16px; line-height: 1.85; color: var(--text-primary); margin-top: 2px; }
+.rule-sel-wrap { position: relative; display: inline-block; white-space: nowrap; color: #1d4ed8; }
+.rule-sel-wrap::after { content: ''; position: absolute; right: 1px; top: 50%; margin-top: -2px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; pointer-events: none; }
+select.rule-sel { -webkit-appearance: none; -moz-appearance: none; appearance: none; font: inherit; font-weight: 600; color: inherit; background: transparent; border: 0; border-radius: 0; margin: 0; padding: 0 16px 0 0; cursor: pointer; max-width: 100%; text-overflow: clip; }
+select.rule-sel:hover { text-decoration: underline; text-underline-offset: 3px; }
+select.rule-sel:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; border-radius: 3px; }
+select.rule-sel option { color: #1f2937; font-weight: 400; }
+.rule-val { font-weight: 600; color: #1d4ed8; }
+/* the tree is a diagram: on wider windows its card extends a little past the (narrow) text column, like a figure */
+@media (min-width: 1120px) { .tree-card { margin-left: -70px; margin-right: -70px; } }
+/* the outcome box carries its own drop-down and keeps the box's colour */
+.fft-leaf .rule-sel-wrap { color: inherit; }
+.fft-leaf select.rule-sel { font-size: var(--fs-md); font-weight: 700; }
+.fft-linkbtn { display: block; margin-top: 10px; background: none; border: none; padding: 0; font: inherit; font-size: 14px; color: #1d4ed8; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-align: left; }
+.fft-linkbtn:hover { color: #1e40af; }
 </style>
 {% include "_study_ui_css.html" %}
 <style>
 body { background: #fff; }
-.page-wrap { max-width: 1440px; padding: 36px 24px 48px; }
+.page-wrap { max-width: 900px; padding: 36px 40px 48px; }     /* the narrow page (the same width as the feature-list page) */
 
 /* ── Always-visible toolbar help button ───────────────────────── */
 .btn-toolbar-help {
@@ -752,7 +768,7 @@ body { background: #fff; }
 
 <div class="page-wrap">
   {% if not final_mode %}
-  {{ page_header(past_scenarios_json | length) }}
+  <div id="ts-intro">{{ page_header(past_scenarios_json | length) }}</div>
   <div id="intro-gate" style="margin-top:24px">
     <button type="button" class="btn-continue" id="btn-intro-continue">Continue to my model →</button>
   </div>
@@ -769,12 +785,15 @@ body { background: #fff; }
 
   {% if not final_mode %}<div id="model-body" style="display:none">{% endif %}
 
-  {% call step(1, "Step 1. Approve or modify the checks the AI applies, in order", open=True) %}
-  <div class="ts-step-sub">The AI goes through these checks from top to bottom, and the first one that applies decides the case. {% if not final_mode %}Click any check to change it, or add a new one. When you are done, tell us below whether the tree matches how you decide.{% endif %}</div>
-  {% if not final_mode %}<div class="ts-legend">✎ click a check to edit it &nbsp;·&nbsp; ▲▼ move it up or down &nbsp;·&nbsp; dashed outline = you can click it</div>{% endif %}
+  {% if not final_mode %}{{ stepper() }}
+  {{ guide_offer() }}{% endif %}
+
+  {% call screen(1, "Step 1. Approve or modify the rules the AI applies, in order", "ts-step1-preview") %}
+  <div class="ts-step-sub">The AI goes through these rules from top to bottom, and the first one that applies decides the case. {% if not final_mode %}Each rule is written as a sentence: change the blue parts to edit it, choose the outcome in the box below it, or add a new rule. When you are done, tell us below whether the tree matches how you decide.{% endif %}</div>
+  {% if not final_mode %}<div class="ts-legend">Blue text and boxes marked ▾ are drop-downs you can change &nbsp;·&nbsp; ▲▼ move a rule up or down &nbsp;·&nbsp; 🗑 delete a rule &nbsp;·&nbsp; + add a rule</div>{% endif %}
   <div class="tree-card">
     <div id="toolbar">
-      <button class="btn-add"   id="btn-add">＋ Add decision step</button>
+      <button class="btn-add"   id="btn-add">＋ Add a rule</button>
       <span class="limit-note ok" id="limit-note"></span>
     </div>
 
@@ -801,47 +820,6 @@ body { background: #fff; }
     <div id="svg-wrap">
       <div id="svg-canvas"></div>
       <!-- Floating edit panel (shared, repositioned per node) -->
-    <div id="edit-panel">
-      <div class="ep-header">
-        <div class="ep-header-left">
-          <button class="ep-icon-btn del" id="ep-del" title="Delete this step">🗑</button>
-          <span class="ep-title" id="ep-step-label">STEP 1</span>
-        </div>
-        <button class="ep-icon-btn" id="ep-close" title="Close">✕</button>
-      </div>
-      <p class="ep-intro">This step checks the difference between the two patients on one
-        factor. If the gap clears your threshold, it decides the case immediately — otherwise
-        the model moves on to the next step.</p>
-
-      <div class="ep-field-label">Factor</div>
-      <select class="ep-select feat" id="ep-feat"></select>
-
-      <div class="ep-field-label">Condition</div>
-      <div class="ep-cond-row" style="align-items:center">
-        <span id="ep-abs-label" style="font-family:monospace;font-size: var(--fs-sm);color:var(--text-muted);padding:6px 4px;white-space:nowrap"></span>
-        <select class="ep-select op" id="ep-op">
-          <option value=">=">≥</option>
-          <option value="<=">≤</option>
-        </select>
-        <span class="slider-value" id="ep-thr-out">0</span>
-      </div>
-      <div class="slider-row">
-        <input type="range" id="ep-thr" min="0" max="20" step="1" value="0">
-      </div>
-      <div class="slider-caption" id="ep-thr-caption"></div>
-
-      <div id="ep-outcome-section">
-        <div class="ep-outcome-label">When YES, prefer:</div>
-        <div class="ep-outcome-row">
-          <button class="ep-toggle ep-toggle-a" id="ep-out-a">→ A</button>
-          <button class="ep-toggle ep-toggle-b" id="ep-out-b">→ B</button>
-        </div>
-      </div>
-
-      <hr class="ep-sep">
-      <div id="ep-refine"></div>
-    </div>
-
     <!-- Default-class mini panel -->
     <div id="default-panel" style="display:none;position:absolute;left:36px;background:#fff;
       border:1.5px solid var(--accent);border-radius:8px;padding:10px 14px;
@@ -856,49 +834,7 @@ body { background: #fff; }
       </div>
     </div>
 
-    <!-- YES-leaf panel: toggle outcome or insert a step here -->
-    <div id="leaf-panel" class="sub-panel">
-      <div class="ep-header">
-        <span class="ep-title" id="lp-title">STEP 1 · YES EXIT</span>
-        <button class="ep-icon-btn" id="lp-close">✕</button>
-      </div>
-      <div class="ep-outcome-label">Outcome when YES fires:</div>
-      <div class="ep-outcome-row">
-        <button class="ep-toggle ep-toggle-a" id="lp-out-a">→ A</button>
-        <button class="ep-toggle ep-toggle-b" id="lp-out-b">→ B</button>
-      </div>
-      <button class="btn-insert-step" id="lp-insert">＋ Add a follow-up check</button>
-    </div>
 
-    <!-- Follow-up check (refine) edit panel -->
-    <div id="refine-panel" class="sub-panel">
-      <div class="ep-header">
-        <span class="ep-title" id="rp-title">FOLLOW-UP CHECK · STEP 1</span>
-        <div class="ep-actions">
-          <button class="ep-icon-btn del" id="rp-del" title="Remove follow-up check">🗑</button>
-          <button class="ep-icon-btn" id="rp-close">✕</button>
-        </div>
-      </div>
-      <div class="ep-field-label">Factor</div>
-      <select class="ep-select feat" id="rp-feat"></select>
-      <div class="ep-field-label">Condition</div>
-      <div class="ep-cond-row" style="align-items:center">
-        <select class="ep-select op" id="rp-op">
-          <option value=">=">≥</option>
-          <option value="<=">≤</option>
-        </select>
-        <span class="slider-value" id="rp-thr-out">0</span>
-      </div>
-      <div class="slider-row">
-        <input type="range" id="rp-thr" min="0" max="20" step="1" value="0">
-      </div>
-      <div class="slider-caption" id="rp-thr-caption"></div>
-      <div class="ep-outcome-label" id="rp-outcome-label">Prefer when condition fires:</div>
-      <div class="ep-outcome-row">
-        <button class="ep-toggle ep-toggle-a" id="rp-out-a">→ A</button>
-        <button class="ep-toggle ep-toggle-b" id="rp-out-b">→ B</button>
-      </div>
-    </div>
   </div>
 
     </div><!-- /#svg-scroll -->
@@ -906,12 +842,17 @@ body { background: #fff; }
   {% if not final_mode %}<div class="ts-review-bar" id="ts-tree-review"></div>{% endif %}
   {% endcall %}
 
-  {{ summary_card() }}
+  <div id="ts-summary-wrap">{{ summary_card() }}</div>
   {% if not final_mode %}
   {{ match_panel() }}
+
+  {% call screen(2, "Step 2. Rate your model and lock it in") %}
   {{ actions(has_override) }}
   {{ rating() }}
   {{ lock_in() }}
+  {% endcall %}
+
+  {{ step_nav() }}
   {% else %}
   {{ final_continue(survey_url) }}
   {% endif %}
@@ -1107,12 +1048,6 @@ function outcomeLabel(node, short) {
   return preferHigher ? 'Higher value' : 'Lower value';
 }
 
-function nodeCondText(node) {
-  var feat = prettyFeature(node ? node.feature : '');
-  var sym = (node && node.op === '<=') ? '\u2264' : '\u2265';
-  if (node && node.use_abs) return '|' + feat + '| ' + sym + ' ' + fmt(Math.abs(node.threshold));
-  return feat + ' ' + sym + ' ' + fmt(node ? node.threshold : 0);
-}
 
 // Default (fall-through) leaf label — deliberately non-directional. The
 // model still picks someone when forced to (tree.default_class), but this
@@ -1171,10 +1106,6 @@ function pretty(f) {
 function dropdownLabel(f) {
   return 'Difference in ' + pretty(f);
 }
-function prettyFeature(f) {
-  var name = pretty(f);
-  return '<span class="fft-feat">' + name + '</span>(A) \u2212 <span class="fft-feat">' + name + '</span>(B)';
-}
 function getSVGScale() {
   // Panels are positioned in SVG coordinates, then scaled by the zoom factor.
   return zoom;
@@ -1186,12 +1117,90 @@ function getSVGScale() {
 // wording (labels, explanations, units) and hands it to the renderer as
 // helpers, so the renderer stays purely about geometry.
 
+// ── Rules are written as sentences; the blue parts are drop-downs ───────────────────────────────────────
+function baseOf(f) { return (f || '').replace('_diff', ''); }
+function numAsc(x, y) { return x - y; }
+// The gaps that can really occur between two patients on a factor, so every option in the list means something.
+function gapChoices(feature, current) {
+  var f = FEATURE_BY_KEY[baseOf(feature)], vs = (f && f.values && f.values.length) ? f.values.slice().sort(numAsc) : null, set = {}, i, j;
+  if (vs) { for (i = 0; i < vs.length; i++) for (j = i + 1; j < vs.length; j++) set[Math.abs(vs[j] - vs[i])] = 1; }
+  else { var rg = featureRange(feature); for (var v = Math.max(1, rg.min); v <= rg.max; v += (rg.step || 1)) set[v] = 1; }
+  var arr = Object.keys(set).map(Number).filter(function(v) { return v > 0; }).sort(numAsc);
+  if (current != null && !isNaN(current) && arr.indexOf(current) < 0) { arr.push(current); arr.sort(numAsc); }
+  return arr.length ? arr : [1];
+}
+function nearestIn(arr, v) { var best = arr[0], d = Infinity; arr.forEach(function(x) { var dd = Math.abs(x - v); if (dd < d) { d = dd; best = x; } }); return best; }
+function gapUnit(feature, n) { var meta = FEATURE_GAP[feature] || ['', '']; return _unitStr(n, meta[1]); }        // " years" / " percentage points" / ""
+var _measureCtx;
+function textPx(text, px, weight) {       // how wide a drop-down's text is, so it can be sized to fit (no empty gap in the sentence)
+  if (_measureCtx === undefined) {
+    try { _measureCtx = /jsdom/i.test(navigator.userAgent) ? null : (document.createElement('canvas').getContext('2d') || null); } catch (e) { _measureCtx = null; }
+  }
+  if (!_measureCtx) return String(text).length * px * 0.6;
+  _measureCtx.font = weight + ' ' + px + 'px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
+  return _measureCtx.measureText(String(text)).width;
+}
+function ruleSelect(kind, i, field, options, selected, label, leaf) {
+  var cur = options.filter(function(o) { return String(o[0]) === String(selected); })[0] || options[0];
+  var w = Math.ceil(textPx(cur[1], leaf ? 15.5 : 16, leaf ? 700 : 600)) + 21;         // text + room for the triangle
+  return '<span class="rule-sel-wrap"><select class="rule-sel" data-rule="' + kind + '" data-i="' + i + '" data-field="' + field + '" aria-label="' + esc(label) + '" style="width:' + w + 'px">'
+    + options.map(function(o) { return '<option value="' + esc(String(o[0])) + '"' + (String(o[0]) === String(selected) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('')
+    + '</select></span>';
+}
+// A rule as a sentence. While editing, the factor, the size of the gap and the patient to choose are drop-downs (blue);
+// on the read-only final page the same sentence shows those values in bold blue.
+function ruleHTML(nd, i, kind) {
+  var r = kind === 'refine' ? nd.refine : nd;
+  if (!r || r.use_abs === false) return null;           // old signed-difference rules keep their plain caption
+  var thr = Math.round(Math.abs(r.threshold || 0)), atMost = (r.op === '<=');
+  function part(field, options, selected, text, label) {
+    return editing ? ruleSelect(kind, i, field, options, selected, label) : '<span class="rule-val">' + esc(text) + '</span>';
+  }
+  var feat = part('feature', params.map(function(p) { return [p, pretty(p)]; }), r.feature, pretty(r.feature), 'Factor');
+  var amount = part('threshold', gapChoices(r.feature, thr).map(function(v) { return [v, String(v)]; }), thr, String(thr), 'Size of the gap') + esc(gapUnit(r.feature, thr));
+  var gap = 'the gap in ' + feat + ' between A &amp; B ' + (atMost ? 'is no more than ' : 'is at least ') + amount + '.';
+  if (kind === 'refine') return 'If that is a close call, check whether ' + gap;
+  var head = (i === 0 ? 'You first check whether ' : 'Next, you check whether ') + gap;
+  if (nd.refine) return head + (atMost ? ' That is a close call, so the follow-up check below decides.' : ' If it is, the follow-up check below decides.');
+  return head;
+}
+// Which patient a rule chooses is picked in its outcome box (the YES branch): "Longer wait" / "Shorter wait", ...
+function leafSelect(nd, i, kind) {
+  var r = kind === 'refine' ? nd.refine : nd;
+  if (!editing || !r || r.use_abs === false) return null;
+  var sp = SHORT_LABELS[baseOf(r.feature)] || ['Higher', 'Lower'];
+  return ruleSelect(kind, i, 'dir', [['higher', sp[0]], ['lower', sp[1]]], r.prefer_higher !== false ? 'higher' : 'lower', 'Which patient to choose', true);
+}function pulseNode(i) {       // draw the eye to a rule that was just added
+  setTimeout(function() {
+    var el = document.querySelector('[data-node="' + i + '"]');
+    if (el) { el.classList.add('fft-node-pulse'); el.scrollIntoView({block: 'nearest', behavior: 'smooth'}); }
+  }, 60);
+}
+document.getElementById('svg-canvas').addEventListener('change', function(e) {
+  var t = e.target;
+  if (!t || !t.classList || !t.classList.contains('rule-sel')) return;
+  var kind = t.getAttribute('data-rule'), i = parseInt(t.getAttribute('data-i'), 10), field = t.getAttribute('data-field');
+  var nd = tree && tree.nodes && tree.nodes[i];
+  var r = nd && (kind === 'refine' ? nd.refine : nd);
+  if (!r) return;
+  if (field === 'feature') { r.feature = t.value; r.threshold = nearestIn(gapChoices(r.feature), Math.abs(r.threshold || 0)); }
+  else if (field === 'threshold') { r.threshold = parseInt(t.value, 10); }
+  else if (field === 'dir') {
+    var hi = t.value === 'higher';
+    r.prefer_higher = hi;
+    if (kind === 'refine') { r.true_class = hi ? 1 : 0; r.false_class = hi ? 0 : 1; } else { nd.exit_class = hi ? 1 : 0; }
+  }
+  logEvent('rule_edit', {step: i + 1, kind: kind, field: field, to: t.value});
+  rebuildExplanations();
+  redraw();
+});
+
 function treeHelpers() {
   return {
+    ruleHTML: ruleHTML,
+    leafSelect: leafSelect,
     esc: esc,
     fmt: fmt,
-    prettyFeature: prettyFeature,
-    nodeCondText: nodeCondText,
     outcomeLabel: outcomeLabel,
     refineOutcomeLabel: refineOutcomeLabel,
     defaultOutcomeLabel: defaultOutcomeLabel
@@ -1239,12 +1248,16 @@ function setZoom(next, reason) {
 // Fit the whole tree — both width and height — into the visible area, but
 // never below a readable size. The previous version only matched width,
 // which is why a tall tree still needed scrolling after clicking "Fit".
+var AUTO_FIT_MIN = 0.9;
 function fitZoom(silent) {
   var scroll = document.getElementById('svg-scroll');
   if (!scroll || !lastLayout.width || !lastLayout.height) return;
   var wRatio = (scroll.clientWidth - 8) / lastLayout.width;
   var hRatio = (scroll.clientHeight - 8) / lastLayout.height;
   var next = Math.min(wRatio, hRatio);
+  // The automatic fit never shrinks the tree below AUTO_FIT_MIN, so the text stays readable (a wide tree scrolls sideways
+  // a little instead). The "Fit" button (not silent) still fits the whole tree.
+  if (silent) next = Math.max(next, AUTO_FIT_MIN);
   zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
   applyZoom();
   if (!silent) logEvent('zoom_changed', {zoom: Math.round(zoom * 100), via: 'fit'});
@@ -1265,8 +1278,6 @@ function render() {
   buildSVG();
   document.getElementById('edit-hint').style.display  = editing ? 'block' : 'none';
   document.getElementById('toolbar').style.display    = editing ? 'flex'  : 'none';
-  document.getElementById('leaf-panel').classList.remove('visible');
-  document.getElementById('refine-panel').classList.remove('visible');
 
   applyZoom();
   updateLimitNote();
@@ -1306,9 +1317,9 @@ function updateLimitNote() {
   var added = newFeaturesAdded();
   var atLimit = !canAddMoreFeatures();
   note.textContent = atLimit
-    ? 'Limit reached — you can add ' + MAX_NEW_FEATURES + ' checks at a time. Apply these, then add more.'
+    ? 'Limit reached — you can add ' + MAX_NEW_FEATURES + ' rules at a time. Apply these, then add more.'
     : 'You can add ' + (MAX_NEW_FEATURES - added) + ' more ' +
-      (MAX_NEW_FEATURES - added === 1 ? 'check' : 'checks') + ' in this pass.';
+      (MAX_NEW_FEATURES - added === 1 ? 'rule' : 'rules') + ' in this pass.';
   note.className = 'limit-note' + (atLimit ? '' : ' ok');
   if (addBtn) {
     addBtn.disabled = atLimit;
@@ -1332,7 +1343,7 @@ function flashLimitReached() {
 }
 
 function closeAllPanels() {
-  closePanel(); closeLeafPanel(); closeRefinePanel(); closeDefaultPanel();
+  closeDefaultPanel();
 }
 
 // ── Interaction logging ───────────────────────────────────────────
@@ -1348,57 +1359,6 @@ function logEvent(name, detail) {
 }
 
 // ── Edit panel ────────────────────────────────────────────────────
-function openPanel(i) {
-  closeLeafPanel(); closeRefinePanel(); closeDefaultPanel();
-  selectedNode = i;
-  var nd = tree.nodes[i];
-
-  document.getElementById('ep-step-label').textContent = 'STEP ' + (i + 1);
-  document.getElementById('ep-del').style.display = tree.nodes.length > 1 ? '' : 'none';
-
-  // Feature
-  var featSel = document.getElementById('ep-feat');
-  featSel.innerHTML = '';
-  params.forEach(function(p) {
-    var opt = document.createElement('option');
-    opt.value = p; opt.textContent = dropdownLabel(p);
-    if (opt.value === nd.feature) opt.selected = true;
-    featSel.appendChild(opt);
-  });
-
-  document.getElementById('ep-op').value = nd.op || '>=';
-  document.getElementById('ep-thr').value = Math.round(Math.abs(nd.threshold));
-  var absLbl = document.getElementById('ep-abs-label');
-  var opSel = document.getElementById('ep-op');
-  if (nd.use_abs !== false) {
-    absLbl.textContent = '|' + pretty(nd.feature) + ' gap| \u2265';
-    absLbl.style.display = '';
-    opSel.style.display = 'none';
-  } else {
-    absLbl.style.display = 'none';
-    opSel.style.display = '';
-  }
-
-  // Outcome toggle: use prefer_higher for abs nodes, exit_class for legacy
-  var aIsOn = nd.use_abs ? nd.prefer_higher !== false : nd.exit_class === 1;
-  setOutcomeToggle('ep-out-a', 'ep-out-b', aIsOn);
-
-  // Update outcome button labels to be semantic when use_abs
-  _refreshOutcomeLabels(nd.feature, 'ep-out-a', 'ep-out-b');
-
-  buildRefine(i, nd.refine);
-
-  // Hide the parent outcome section when a follow-up check handles the YES exit
-  document.getElementById('ep-outcome-section').style.display = nd.refine ? 'none' : '';
-
-  syncThresholdSlider('ep-thr', 'ep-thr-out', 'ep-thr-caption', nd.feature);
-
-  // Re-render first so the selected outline is drawn and the layout is fresh,
-  // then position the panel against the box it belongs to.
-  redraw();
-  positionPanel('edit-panel', lastLayout.nodes[i]);
-  logEvent('step_panel_opened', {step: i + 1});
-}
 
 // Place a floating HTML panel just below a box from the SVG layout. Boxes are
 // in SVG coordinates, so everything is multiplied by the zoom factor.
@@ -1432,252 +1392,23 @@ function featureRange(feature) {
   return {min: 0, max: Math.max(1, span), step: r.step || 1};
 }
 
-function syncThresholdSlider(sliderId, outId, captionId, feature) {
-  var slider = document.getElementById(sliderId);
-  var out = document.getElementById(outId);
-  var caption = document.getElementById(captionId);
-  if (!slider) return;
-  var r = featureRange(feature);
-  var current = parseFloat(slider.value);
-  slider.min = r.min;
-  slider.max = r.max;
-  slider.step = r.step;
-  if (!isNaN(current)) slider.value = Math.max(r.min, Math.min(r.max, current));
-  if (out) out.textContent = slider.value;
-  if (caption) {
-    caption.textContent = 'Drag to set the gap that makes this check fire (' +
-      r.min + '–' + r.max + ').';
-  }
-}
 
-function bindSliderReadout(sliderId, outId, onCommit) {
-  var slider = document.getElementById(sliderId);
-  var out = document.getElementById(outId);
-  if (!slider) return;
-  slider.addEventListener('input', function () {
-    if (out) out.textContent = slider.value;
-  });
-  slider.addEventListener('change', function () {
-    if (out) out.textContent = slider.value;
-    if (onCommit) onCommit();
-  });
-}
 
 // Set semantic text on outcome toggle buttons based on node feature
-function _refreshOutcomeLabels(feature, idA, idB) {
-  var base = (feature || '').replace('_diff', '');
-  var pair = SHORT_LABELS[base];
-  var btnA = document.getElementById(idA);
-  var btnB = document.getElementById(idB);
-  if (btnA && btnB && pair) {
-    btnA.textContent = pair[0];
-    btnB.textContent = pair[1];
-  } else if (btnA && btnB) {
-    btnA.textContent = 'Choose A';
-    btnB.textContent = 'Choose B';
-  }
-}
 
 // Set semantic labels on follow-up-check outcome buttons.
 // btnA → what you get when true_class=1 and condition fires.
 // btnB → what you get when true_class=0 and condition fires.
-function _refreshRefineTrueLabels(refine, idA, idB) {
-  var btnA = document.getElementById(idA);
-  var btnB = document.getElementById(idB);
-  if (!btnA || !btnB || !refine) return;
-  var labelA = refineOutcomeLabel(Object.assign({}, refine, {true_class: 1}), true);
-  var labelB = refineOutcomeLabel(Object.assign({}, refine, {true_class: 0}), true);
-  btnA.textContent = '→ ' + labelA;
-  btnB.textContent = '→ ' + labelB;
-}
 
 // Rebuild SVG in-place while the panel stays open (real-time feedback)
 function updateSVG() {
-  savePanel();
-  saveLeafPanel();
-  saveRefinePanel();
   saveDefaultPanel();
   rebuildExplanations();
   redraw();
 }
 
-function closePanel() {
-  savePanel();
-  document.getElementById('edit-panel').style.display = 'none';
-  if (selectedNode !== null) {
-    selectedNode = null;
-    redraw();
-  }
-}
 
-function savePanel() {
-  if (selectedNode === null) return;
-  var i  = selectedNode;
-  var nd = tree.nodes[i];
 
-  nd.feature    = document.getElementById('ep-feat').value;
-  nd.op         = document.getElementById('ep-op').value || '>=';
-  var tv        = parseFloat(document.getElementById('ep-thr').value);
-  if (!isNaN(tv)) nd.threshold = Math.round(Math.abs(tv));
-  var aOn = document.getElementById('ep-out-a').classList.contains('ep-on');
-  if (nd.use_abs) {
-    nd.prefer_higher = aOn;  // "A button" = prefer higher for abs nodes
-  } else {
-    nd.exit_class = aOn ? 1 : 0;
-  }
-
-  // Refine
-  var rf = document.getElementById('ep-r-feat');
-  if (rf && nd.refine) {
-    nd.refine.feature = rf.value;
-    var rv = parseFloat(document.getElementById('ep-r-thr').value);
-    if (nd.refine.use_abs) {
-      nd.refine.op = '>=';
-      if (!isNaN(rv)) nd.refine.threshold = Math.round(Math.abs(rv));
-      var rAOn = document.getElementById('ep-r-out-a').classList.contains('ep-on');
-      nd.refine.prefer_higher = rAOn;
-      nd.refine.true_class    = rAOn ? 1 : 0;
-      nd.refine.false_class   = rAOn ? 0 : 1;
-    } else {
-      nd.refine.op = (document.getElementById('ep-r-op') || {}).value || '>=';
-      if (!isNaN(rv)) nd.refine.threshold = Math.round(rv);
-      nd.refine.true_class  = document.getElementById('ep-r-out-a').classList.contains('ep-on') ? 1 : 0;
-      nd.refine.false_class = nd.refine.true_class === 1 ? 0 : 1;
-    }
-  }
-}
-
-function buildRefine(nodeIdx, refine) {
-  var sec = document.getElementById('ep-refine');
-  sec.innerHTML = '';
-
-  if (refine) {
-    var head = document.createElement('div');
-    head.className = 'ep-refine-head';
-
-    var lbl = document.createElement('span');
-    lbl.className = 'ep-field-label';
-    lbl.textContent = 'Follow-up check (if YES):';
-
-    var rmBtn = document.createElement('button');
-    rmBtn.className = 'ep-rm-refine';
-    rmBtn.textContent = 'Remove ✕';
-    rmBtn.addEventListener('click', function() {
-      savePanel();
-      delete tree.nodes[nodeIdx].refine;
-      buildRefine(nodeIdx, null);
-      // Restore parent outcome section now that the follow-up check is gone
-      document.getElementById('ep-outcome-section').style.display = '';
-      rebuildExplanations();
-      redraw();
-    });
-    head.appendChild(lbl); head.appendChild(rmBtn);
-    sec.appendChild(head);
-
-    var rFeat = document.createElement('select');
-    rFeat.id = 'ep-r-feat'; rFeat.className = 'ep-select feat';
-    params.forEach(function(p) {
-      var opt = document.createElement('option');
-      opt.value = p; opt.textContent = dropdownLabel(p);
-      if (opt.value === refine.feature) opt.selected = true;
-      rFeat.appendChild(opt);
-    });
-    sec.appendChild(rFeat);
-
-    var rRow = document.createElement('div'); rRow.className = 'ep-cond-row';
-    var rOp = document.createElement('select');
-    rOp.id = 'ep-r-op'; rOp.className = 'ep-select op';
-    [['>=','≥'],['<=','≤']].forEach(function(p) {
-      var opt=document.createElement('option'); opt.value=p[0]; opt.textContent=p[1];
-      if (p[0]===(refine.op||'>=')) opt.selected=true; rOp.appendChild(opt);
-    });
-    var rRange = featureRange(refine.feature);
-    var rThr = document.createElement('input');
-    rThr.id = 'ep-r-thr'; rThr.type = 'range';
-    rThr.min = rRange.min; rThr.max = rRange.max; rThr.step = rRange.step;
-    rThr.value = Math.max(rRange.min,
-                   Math.min(rRange.max, Math.round(Math.abs(refine.threshold))));
-    var rThrOut = document.createElement('span');
-    rThrOut.className = 'slider-value';
-    rThrOut.id = 'ep-r-thr-out';
-    rThrOut.textContent = rThr.value;
-    rThr.addEventListener('input', function () { rThrOut.textContent = rThr.value; });
-    // For abs refine: replace op dropdown with the actual feature name label
-    if (refine.use_abs) {
-      var rAbsLbl = document.createElement('span');
-      rAbsLbl.id = 'ep-r-abs-label';
-      rAbsLbl.style.cssText = 'font-family:monospace;font-size: var(--fs-sm);color:var(--text-muted);padding:6px 4px;white-space:nowrap';
-      rAbsLbl.textContent = '|' + pretty(refine.feature) + ' gap| \u2265';
-      rRow.appendChild(rAbsLbl);
-    } else {
-      rRow.appendChild(rOp);
-    }
-    rRow.appendChild(rThrOut);
-    sec.appendChild(rRow);
-    var rSliderRow = document.createElement('div');
-    rSliderRow.className = 'slider-row';
-    rSliderRow.appendChild(rThr);
-    sec.appendChild(rSliderRow);
-
-    var rOutLbl = document.createElement('div');
-    rOutLbl.className='ep-outcome-label'; rOutLbl.textContent='Prefer when condition fires:'; rOutLbl.style.marginTop='6px';
-    sec.appendChild(rOutLbl);
-
-    var rOutRow = document.createElement('div'); rOutRow.className='ep-outcome-row';
-    var rBtnA = document.createElement('button');
-    rBtnA.id='ep-r-out-a'; rBtnA.className='ep-toggle ep-toggle-a'+(refine.true_class===1?' ep-on':'');
-    var rBtnB = document.createElement('button');
-    rBtnB.id='ep-r-out-b'; rBtnB.className='ep-toggle ep-toggle-b'+(refine.true_class===0?' ep-on':'');
-    rOutRow.appendChild(rBtnA); rOutRow.appendChild(rBtnB); sec.appendChild(rOutRow);
-    // Set semantic labels based on refine feature/op/threshold
-    _refreshRefineTrueLabels(refine, 'ep-r-out-a', 'ep-r-out-b');
-    rBtnA.addEventListener('click', function(){
-      setOutcomeToggle('ep-r-out-a','ep-r-out-b',true);
-      var nd2 = tree.nodes[nodeIdx];
-      if (nd2.refine) _refreshRefineTrueLabels(nd2.refine, 'ep-r-out-a', 'ep-r-out-b');
-      updateSVG();
-    });
-    rBtnB.addEventListener('click', function(){
-      setOutcomeToggle('ep-r-out-a','ep-r-out-b',false);
-      var nd2 = tree.nodes[nodeIdx];
-      if (nd2.refine) _refreshRefineTrueLabels(nd2.refine, 'ep-r-out-a', 'ep-r-out-b');
-      updateSVG();
-    });
-    rFeat.addEventListener('change', function() {
-      var nd2 = tree.nodes[nodeIdx];
-      if (nd2.refine) {
-        nd2.refine.feature = this.value;
-        _refreshRefineTrueLabels(nd2.refine, 'ep-r-out-a', 'ep-r-out-b');
-        var absLbl2 = document.getElementById('ep-r-abs-label');
-        if (absLbl2) absLbl2.textContent = '|' + pretty(this.value) + ' gap| \u2265';
-      }
-      updateSVG();
-    });
-    rOp.addEventListener('change', function() {
-      var nd2 = tree.nodes[nodeIdx];
-      if (nd2.refine) {
-        nd2.refine.op = this.value;
-        _refreshRefineTrueLabels(nd2.refine, 'ep-r-out-a', 'ep-r-out-b');
-      }
-      updateSVG();
-    });
-    rThr.addEventListener('change', function() {
-      var nd2 = tree.nodes[nodeIdx];
-      if (nd2.refine) {
-        var tv = parseFloat(this.value);
-        if (!isNaN(tv)) nd2.refine.threshold = Math.round(tv);
-        _refreshRefineTrueLabels(nd2.refine, 'ep-r-out-a', 'ep-r-out-b');
-      }
-      updateSVG();
-    });
-
-  } else {
-    var hint = document.createElement('div');
-    hint.className = 'ep-hint';
-    hint.textContent = 'Want to check something else before deciding on this step\u2019s YES answer? Click the \u270E on the outcome box below instead of here.';
-    sec.appendChild(hint);
-  }
-}
 
 // Insert a plain, general decision rule right after a given node — a normal
 // sequential check, not a nested follow-up. It only fires when every rule
@@ -1691,7 +1422,7 @@ function insertRuleAfter(afterIndex) {
     if (used.indexOf(params[pi]) === -1) { rf = params[pi]; break; }
   }
   if (!rf) rf = params[0] || 'age_diff';
-  var newNode = { feature: rf, op: '>=', threshold: 0, use_abs: true, prefer_higher: true, exit_class: 1, support: 0, purity: 0.5 };
+  var newNode = { feature: rf, op: '>=', threshold: gapChoices(rf)[0], use_abs: true, prefer_higher: true, exit_class: 1, support: 0, purity: 0.5 };
   var insertAt = afterIndex + 1;
   tree.nodes.splice(insertAt, 0, newNode);
   return insertAt;
@@ -1702,125 +1433,16 @@ function insertRuleAfter(afterIndex) {
 // "Add a rule after this step" button inside the main edit panel (an advanced option —
 // separate from "Add a rule after this step", which inserts a plain
 // sequential rule; see insertRuleAfter above).
-function addTieBreakerToNode(nodeIdx) {
-  var used = [tree.nodes[nodeIdx].feature];
-  var rf2 = null;
-  for (var pi = 0; pi < params.length; pi++) {
-    if (used.indexOf(params[pi]) === -1) { rf2 = params[pi]; break; }
-  }
-  if (!rf2) rf2 = params[0] || 'age_diff';
-  tree.nodes[nodeIdx].refine = {
-    feature: rf2, op: '>=', threshold: 0, true_class: 1, false_class: 0,
-    support: 0, false_support: 0, purity: .5, false_purity: .5, manual: true
-  };
-}
 
 // ── Leaf panel (YES exit) ─────────────────────────────────────────
-var leafPanelNode = null;
 
-function openLeafPanel(i) {
-  closePanel(); closeDefaultPanel(); closeRefinePanel();
-  leafPanelNode = i;
-  var nd = tree.nodes[i];
-  document.getElementById('lp-title').textContent = 'STEP ' + (i + 1) + ' · YES EXIT';
-  // use_abs nodes store the preference in prefer_higher, not exit_class
-  var aIsOn = nd.use_abs ? nd.prefer_higher !== false : nd.exit_class === 1;
-  setOutcomeToggle('lp-out-a', 'lp-out-b', aIsOn);
-  _refreshOutcomeLabels(nd.feature, 'lp-out-a', 'lp-out-b');
 
-  positionPanel('leaf-panel', lastLayout.leaves[i], {visibleClass: true});
-  logEvent('outcome_panel_opened', {step: i + 1});
-}
 
-function saveLeafPanel() {
-  if (leafPanelNode === null) return;
-  var nd = tree.nodes[leafPanelNode];
-  var aIsOn = document.getElementById('lp-out-a').classList.contains('ep-on');
-  if (nd.use_abs) {
-    nd.prefer_higher = aIsOn;
-    nd.exit_class = aIsOn ? 1 : 0;  // keep in sync so legacy code and colors are correct
-  } else {
-    nd.exit_class = aIsOn ? 1 : 0;
-  }
-}
-
-function closeLeafPanel() {
-  saveLeafPanel();
-  document.getElementById('leaf-panel').classList.remove('visible');
-  leafPanelNode = null;
-}
 
 // ── Refine panel (follow-up check box) ─────────────────────────────
-var refinePanelNode = null;
 
-function openRefinePanel(i) {
-  closePanel(); closeLeafPanel(); closeDefaultPanel();
-  refinePanelNode = i;
-  var r = tree.nodes[i].refine;
-  document.getElementById('rp-title').textContent = 'FOLLOW-UP CHECK · STEP ' + (i + 1);
 
-  var featSel = document.getElementById('rp-feat');
-  featSel.innerHTML = '';
-  params.forEach(function(p) {
-    var opt = document.createElement('option');
-    opt.value = p; opt.textContent = dropdownLabel(p);
-    if (opt.value === r.feature) opt.selected = true;
-    featSel.appendChild(opt);
-  });
 
-  // For abs refine: hide op dropdown, show |Δ| ≥ prefix
-  var rpOpSel = document.getElementById('rp-op');
-  var rpAbsLbl = document.getElementById('rp-abs-label');
-  if (r.use_abs) {
-    rpOpSel.style.display = 'none';
-    if (!rpAbsLbl) {
-      rpAbsLbl = document.createElement('span');
-      rpAbsLbl.id = 'rp-abs-label';
-      rpAbsLbl.style.cssText = 'font-family:monospace;font-size: var(--fs-base);color:var(--text-muted);padding:6px 4px;white-space:nowrap';
-      rpOpSel.parentNode.insertBefore(rpAbsLbl, rpOpSel);
-    }
-    rpAbsLbl.textContent = '|Δ| ≥';
-    rpAbsLbl.style.display = '';
-  } else {
-    rpOpSel.style.display = '';
-    if (rpAbsLbl) rpAbsLbl.style.display = 'none';
-    rpOpSel.value = r.op || '>=';
-  }
-  document.getElementById('rp-thr').value = Math.round(Math.abs(r.threshold));
-  setOutcomeToggle('rp-out-a', 'rp-out-b', r.use_abs ? r.prefer_higher !== false : r.true_class === 1);
-  _refreshRefineTrueLabels(r, 'rp-out-a', 'rp-out-b');
-  syncThresholdSlider('rp-thr', 'rp-thr-out', 'rp-thr-caption', r.feature);
-
-  positionPanel('refine-panel', lastLayout.refines[i], {visibleClass: true});
-  logEvent('tiebreaker_panel_opened', {step: i + 1});
-}
-
-function saveRefinePanel() {
-  if (refinePanelNode === null) return;
-  var r = tree.nodes[refinePanelNode].refine;
-  if (!r) return;
-  r.feature = document.getElementById('rp-feat').value;
-  var tv    = parseFloat(document.getElementById('rp-thr').value);
-  if (r.use_abs) {
-    if (!isNaN(tv)) r.threshold = Math.round(Math.abs(tv));
-    r.op = '>=';
-    var aIsOn = document.getElementById('rp-out-a').classList.contains('ep-on');
-    r.prefer_higher = aIsOn;
-    r.true_class    = aIsOn ? 1 : 0;
-    r.false_class   = aIsOn ? 0 : 1;
-  } else {
-    r.op = document.getElementById('rp-op').value;
-    if (!isNaN(tv)) r.threshold = Math.round(tv);
-    r.true_class  = document.getElementById('rp-out-a').classList.contains('ep-on') ? 1 : 0;
-    r.false_class = r.true_class === 1 ? 0 : 1;
-  }
-}
-
-function closeRefinePanel() {
-  saveRefinePanel();
-  document.getElementById('refine-panel').classList.remove('visible');
-  refinePanelNode = null;
-}
 
 // ── Reorder nodes ─────────────────────────────────────────────────
 function moveNode(i, dir) {
@@ -1907,7 +1529,6 @@ function onStepDragEnd() {
 
 // ── Default panel ─────────────────────────────────────────────────
 function openDefaultPanel() {
-  closePanel();
   setOutcomeToggle('def-out-a','def-out-b', tree.default_class === 1);
 
   // Refresh button labels: derive semantic direction from the last node's feature
@@ -1968,22 +1589,10 @@ function setOutcomeToggle(idA, idB, aIsOn) {
 
 // Re-attach node clicks after innerHTML rebuild
 function reAttachNodeClicks() {
-  // The SVG is rebuilt with innerHTML on every change, so its listeners have
-  // to be re-bound each time. Outside edit mode the boxes stay inert.
+  // The canvas is rebuilt on every change, so these are re-bound each time. Outside edit mode the boxes stay inert.
+  // (The rule sentences edit themselves through their drop-downs: see the 'change' listener on #svg-canvas.)
   if (!editing) { attachWrapDismiss(); return; }
 
-  document.querySelectorAll('[data-node]').forEach(function(g) {
-    var idx = parseInt(g.getAttribute('data-node'), 10);
-    g.addEventListener('click', function(e) { e.stopPropagation(); openPanel(idx); });
-  });
-  document.querySelectorAll('[data-leaf]').forEach(function(g) {
-    var idx = parseInt(g.getAttribute('data-leaf'), 10);
-    g.addEventListener('click', function(e) { e.stopPropagation(); openLeafPanel(idx); });
-  });
-  document.querySelectorAll('[data-refine]').forEach(function(g) {
-    var idx = parseInt(g.getAttribute('data-refine'), 10);
-    g.addEventListener('click', function(e) { e.stopPropagation(); openRefinePanel(idx); });
-  });
   document.querySelectorAll('[data-move-up]').forEach(function(el) {
     var idx = parseInt(el.getAttribute('data-move-up'), 10);
     el.addEventListener('click', function(e) { e.stopPropagation(); moveNode(idx, -1); });
@@ -1993,8 +1602,6 @@ function reAttachNodeClicks() {
     el.addEventListener('click', function(e) { e.stopPropagation(); moveNode(idx, 1); });
   });
   attachStepDrag();
-  // One-click add: the "+" badge sits on the node itself, so creating a check
-  // is a single click on the thing you want it to follow — no panel first.
   document.querySelectorAll('[data-add-after]').forEach(function(el) {
     var idx = parseInt(el.getAttribute('data-add-after'), 10);
     el.addEventListener('click', function(e) {
@@ -2004,7 +1611,7 @@ function reAttachNodeClicks() {
       var newIdx = insertRuleAfter(idx);
       logEvent('step_added', {after: idx + 1, via: 'node_plus_button'});
       render();
-      openPanel(newIdx);
+      pulseNode(newIdx);
     });
   });
   document.querySelectorAll('[data-delete-node]').forEach(function(el) {
@@ -2016,6 +1623,15 @@ function reAttachNodeClicks() {
       tree.nodes.splice(idx, 1);
       selectedNode = null;
       logEvent('step_deleted', {step: idx + 1, via: 'node_trash_button'});
+      render();
+    });
+  });
+  document.querySelectorAll('[data-remove-followup]').forEach(function(el) {
+    var idx = parseInt(el.getAttribute('data-remove-followup'), 10);
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      delete tree.nodes[idx].refine;
+      logEvent('followup_removed', {step: idx + 1});
       render();
     });
   });
@@ -2043,45 +1659,7 @@ function attachWrapDismiss() {
 function updateHeight() {}
 
 // ── Panel button wiring ───────────────────────────────────────────
-document.getElementById('ep-close').addEventListener('click', function() {
-  savePanel(); closePanel();
-});
-document.getElementById('ep-del').addEventListener('click', function() {
-  if (selectedNode === null || tree.nodes.length <= 1) return;
-  logEvent('node_deleted', {step: selectedNode + 1});
-  tree.nodes.splice(selectedNode, 1);
-  selectedNode = null;
-  document.getElementById('edit-panel').style.display = 'none';
-  render();
-});
-document.getElementById('ep-feat').addEventListener('change', function() {
-  var feat = document.getElementById('ep-feat').value;
-  logEvent('feature_changed', {step: selectedNode !== null ? selectedNode + 1 : null, to: feat});
-  _refreshOutcomeLabels(feat, 'ep-out-a', 'ep-out-b');
-  var absLbl = document.getElementById('ep-abs-label');
-  if (absLbl.style.display !== 'none') absLbl.textContent = '|' + pretty(feat) + ' gap| \u2265';
-  updateSVG();
-});
-document.getElementById('ep-op').addEventListener('change', function() {
-  logEvent('operator_changed', {step: selectedNode !== null ? selectedNode + 1 : null,
-                                to: document.getElementById('ep-op').value});
-  updateSVG();
-});
-document.getElementById('ep-thr').addEventListener('change', function() {
-  logEvent('threshold_changed', {step: selectedNode !== null ? selectedNode + 1 : null,
-                                 to: parseFloat(document.getElementById('ep-thr').value)});
-  updateSVG();
-});
-document.getElementById('ep-out-a').addEventListener('click', function() {
-  logEvent('outcome_changed', {step: selectedNode !== null ? selectedNode + 1 : null, to: 'A'});
-  setOutcomeToggle('ep-out-a','ep-out-b',true); updateSVG();
-});
-document.getElementById('ep-out-b').addEventListener('click', function() {
-  logEvent('outcome_changed', {step: selectedNode !== null ? selectedNode + 1 : null, to: 'B'});
-  setOutcomeToggle('ep-out-a','ep-out-b',false); updateSVG();
-});
 // Prevent panel clicks from bubbling to svg-wrap
-document.getElementById('edit-panel').addEventListener('click', function(e){ e.stopPropagation(); });
 document.getElementById('default-panel').addEventListener('click', function(e){ e.stopPropagation(); });
 
 document.getElementById('def-out-a').addEventListener('click', function() {
@@ -2098,82 +1676,22 @@ document.getElementById('def-close').addEventListener('click', function() {
 });
 
 // ── Leaf panel wiring ─────────────────────────────────────────────
-document.getElementById('lp-close').addEventListener('click', function() {
-  saveLeafPanel();
-  closeLeafPanel();
-  redraw();
-});
-document.getElementById('lp-out-a').addEventListener('click', function() {
-  setOutcomeToggle('lp-out-a', 'lp-out-b', true); updateSVG();
-});
-document.getElementById('lp-out-b').addEventListener('click', function() {
-  setOutcomeToggle('lp-out-a', 'lp-out-b', false); updateSVG();
-});
-document.getElementById('lp-insert').addEventListener('click', function() {
-  saveLeafPanel();
-  if (leafPanelNode !== null) {
-    var nodeIdx = leafPanelNode;
-    addTieBreakerToNode(nodeIdx);
-    closeLeafPanel();
-    render();
-    openPanel(nodeIdx);
-  }
-});
-document.getElementById('leaf-panel').addEventListener('click', function(e) { e.stopPropagation(); });
 
 // ── Refine panel wiring ───────────────────────────────────────────
-document.getElementById('rp-close').addEventListener('click', function() {
-  saveRefinePanel();
-  closeRefinePanel();
-  rebuildExplanations();
-  redraw();
-});
-document.getElementById('rp-del').addEventListener('click', function() {
-  if (refinePanelNode === null) return;
-  logEvent('refine_deleted', {step: refinePanelNode + 1});
-  delete tree.nodes[refinePanelNode].refine;
-  closeRefinePanel();
-  render();
-});
-document.getElementById('rp-feat').addEventListener('change', function() {
-  if (refinePanelNode === null) return;
-  var r = tree.nodes[refinePanelNode].refine;
-  if (r) { r.feature = this.value; _refreshRefineTrueLabels(r, 'rp-out-a', 'rp-out-b'); updateSVG(); }
-});
-document.getElementById('rp-op').addEventListener('change', function() {
-  if (refinePanelNode === null) return;
-  var r = tree.nodes[refinePanelNode].refine;
-  if (r) { r.op = this.value; _refreshRefineTrueLabels(r, 'rp-out-a', 'rp-out-b'); updateSVG(); }
-});
-document.getElementById('rp-thr').addEventListener('change', function() {
-  if (refinePanelNode === null) return;
-  var r = tree.nodes[refinePanelNode].refine;
-  if (r) {
-    var tv = parseFloat(this.value);
-    if (!isNaN(tv)) { r.threshold = Math.round(tv); _refreshRefineTrueLabels(r, 'rp-out-a', 'rp-out-b'); }
-    updateSVG();
-  }
-});
-document.getElementById('rp-out-a').addEventListener('click', function() {
-  setOutcomeToggle('rp-out-a', 'rp-out-b', true); updateSVG();
-});
-document.getElementById('rp-out-b').addEventListener('click', function() {
-  setOutcomeToggle('rp-out-a', 'rp-out-b', false); updateSVG();
-});
-document.getElementById('refine-panel').addEventListener('click', function(e) { e.stopPropagation(); });
 
 document.getElementById('btn-add').addEventListener('click', function() {
   if (!canAddMoreFeatures()) { flashLimitReached(); return; }
-  savePanel(); closePanel(); closeDefaultPanel();
+  closeDefaultPanel();
   var used = tree.nodes.map(function(nd){ return nd.feature; });
   var rf = null;
   for (var pi = 0; pi < params.length; pi++) {
     if (used.indexOf(params[pi]) === -1) { rf = params[pi]; break; }
   }
   if (!rf) rf = params[0] || 'age_diff';
-  tree.nodes.push({feature:rf,op:'>=',threshold:0,use_abs:true,prefer_higher:true,exit_class:1,support:0,purity:.5});
+  tree.nodes.push({feature:rf,op:'>=',threshold:gapChoices(rf)[0],use_abs:true,prefer_higher:true,exit_class:1,support:0,purity:.5});
   logEvent('step_added', {via: 'toolbar'});
   render();
+  pulseNode(tree.nodes.length - 1);
 });
 
 // ── Same page flow as the feature-list page ──────────────────────────────────
@@ -2181,10 +1699,11 @@ document.getElementById('btn-add').addEventListener('click', function() {
 // (templates/_study_flow.html) and the "See how your model performs" overlay (templates/_case_overlay.html) are the
 // SAME code the feature-list page uses; only the model differs.
 editing = !FINAL_MODE;              // read-only on the final page, exactly like the feature-list page
+var STUDY_USER = {{ (session.get('username') or '') | tojson }};   // scopes what is remembered in this browser tab to one participant
 var REQUIRE_REVIEW = true;   // lock-in stays unavailable until the tree has been approved or modified (set false to switch off)
 var INITIAL_TREE_JSON = null;      // snapshot once loaded, to know whether there are unsaved edits
 
-function commitOpenPanels() { savePanel(); saveLeafPanel(); saveRefinePanel(); saveDefaultPanel(); }
+function commitOpenPanels() { saveDefaultPanel(); }
 function fmtv(key, v) { var f = FEATURE_BY_KEY[key]; return (f && f.value_suffix) ? v + f.value_suffix : v; }   // e.g. 5 -> 5%
 function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
 
@@ -2201,7 +1720,7 @@ function updateMatchCount() {      // the shared match panel: same ids and wordi
 }
 function treePlainWords() {
   var nodes = (tree && tree.nodes) || [], dflt = (tree && tree.default_class === 1) ? 'A' : 'B';
-  if (!nodes.length) return 'There are no checks yet, so the model just picks Patient ' + dflt + ' every time. Add a check to teach it how you decide.';
+  if (!nodes.length) return 'There are no rules yet, so the model just picks Patient ' + dflt + ' every time. Add a rule to teach it how you decide.';
   var out = ['When you choose between two patients, the model thinks you go through a few checks one at a time, and the first check that settles it decides.'];
   nodes.forEach(function(nd, i) {
     var e = nodeExplanations[i] || {};
@@ -2225,7 +1744,7 @@ function onTreeChanged() {
   updateMatchCount();
   document.getElementById('ts-summary-text').textContent = treePlainWords();
   var n = ((tree && tree.nodes) || []).length;
-  document.getElementById('ts-step1-preview').textContent = n + (n === 1 ? ' check' : ' checks') + ', applied in order \u2014 the first one that applies decides.';
+  document.getElementById('ts-step1-preview').textContent = n + (n === 1 ? ' rule' : ' rules') + ', applied in order \u2014 the first one that applies decides.';
 }
 
 window.CaseAdapter = {
@@ -2245,30 +1764,22 @@ window.CaseAdapter = {
 };
 document.getElementById('ts-match-panel').addEventListener('click', function() { CaseOverlay.open(); });
 
-// The tree measures itself, so it must be visible: draw it when the step is opened.
-var _firstStepOpen = true;
-StudyFlow.steps(function(n) {
-  zoom = 1; render(); fitZoom(true);   // reset first: a fit measured while hidden would otherwise stick
-  if (n === 1 && _firstStepOpen && !FINAL_MODE) {
-    _firstStepOpen = false;
-    // Pulse the first node briefly so users see it's clickable
-    setTimeout(function() {
-      var first = document.querySelector('.fft-node');
-      if (first) {
-        first.classList.add('fft-node-pulse');
-        first.addEventListener('animationend', function() { first.classList.remove('fft-node-pulse'); }, {once: true});
-      }
-    }, 300);
-    // Auto-trigger the edit tutorial once per session
-    if (!sessionStorage.getItem('editTutorialSeen')) {
-      sessionStorage.setItem('editTutorialSeen', '1');
-      setTimeout(function() { openTutorial('first_step_open', 'edit'); }, 600);
-    }
-  }
-});
+// (the steps are screens now: see StudyStepper below)
 StudyReview.init({
-  keys: ['tree'], storageKey: 'ts_review_tree', required: !FINAL_MODE && REQUIRE_REVIEW,
-  gateText: function() { return 'Before you lock in, please tell us in Step 1 whether the tree matches how you decide (or modify it).'; }
+  keys: ['tree'], storageKey: 'ts_review_tree_' + STUDY_USER, required: !FINAL_MODE && REQUIRE_REVIEW,
+  gateText: function() { return 'Before you lock in, please tell us in Step 1 whether the tree matches how you decide (or modify it).'; },
+  onChange: function() { if (typeof StudyStepper !== 'undefined' && StudyStepper.ready()) StudyStepper.refresh(); }
+});
+StudyStepper.init({
+  final: FINAL_MODE, finalScreens: [1], storageKey: 'ts_step_tree_' + STUDY_USER,
+  steps: [{label: 'Check the tree'}, {label: 'Rate & lock in', nextTitle: 'rate and lock in'}],
+  canEnter: function() { return StudyReview.done(); },
+  blockedNote: function() { return 'Tell us whether the tree matches how you decide (or modify it) to continue.'; },
+  teasers: {1: 'Next, in Step 2, you will rate how well this matches your thinking and lock in your model.'},
+  onShow: function(i) {      // coming back to the tree: redraw it to fit (only once it is on screen)
+    var body = document.getElementById('model-body');
+    if (i === 1 && body && body.style.display !== 'none') setTimeout(function() { zoom = 1; render(); fitZoom(true); }, 0);
+  }
 });
 if (!FINAL_MODE) StudyFlow.init({
   onReset: function() { StudyReview.clear(); },
@@ -2446,74 +1957,80 @@ document.addEventListener('keydown', _logReactionOnce, {once: true});
 // View-mode tutorial: explains the tree visualisation
 var TUTORIAL_STEPS = [
   {
-    title: 'Step 1 — click the header to expand or collapse',
-    body:  'The blue “Step 1” card above the tree is clickable — tap it any time to ' +
-           'hide or show the tree. It starts open so you can see your model right away.',
-    target: '#ts-step1-toggle'
+    title: 'Two steps',
+    body:  'Step 1 is the tree: check it, and edit it if it is not how you decide. Step 2 is where you rate how well it ' +
+           'matches your thinking and lock it in. Use \u201cNext\u201d and \u201cBack\u201d at the bottom to move between them.',
+    target: '#ts-stepper', screen: 1
   },
   {
     title: 'How the tree works',
-    body:  'It reads top to bottom. Each box is one check — YES exits left with ' +
-           'an immediate answer, NO continues down to the next check.',
+    body:  'It reads top to bottom. Each box is one rule, written as a sentence — YES exits left with ' +
+           'an immediate answer, NO continues down to the next rule.',
     target: '.tree-card'
   },
   {
-    title: 'Click any check to edit it',
-    body:  'The tree is always editable. Click any check box to change its factor, ' +
-           'threshold, or outcome. Use “＋ Add decision step” to add a new check.',
-    target: '.tree-card'
+    title: 'Edit a rule by changing its blue parts',
+    body:  'Each rule is a sentence. The blue parts are drop-downs: change the factor or the size of the gap. ' +
+           'The box on the YES branch says which patient is chosen \u2014 click it to switch. Use \u201c\uFF0B Add a rule\u201d to add a new rule.',
+    target: '.fft-rule'
   },
   {
     title: 'Apply, rate, and continue',
     body:  'Tell us whether the tree matches how you decide (or edit it). After editing, click “Apply changes” to save. Then rate how well the model ' +
            'matches your thinking (1–7) and click “Lock in my model and continue.”',
-    target: '#ts-apply'
+    target: '#ts-apply', screen: 2
   }
 ];
 
 // Edit-mode tutorial: explains every control on a node, one at a time
 var EDIT_TUTORIAL_STEPS = [
   {
-    title: '✎ Edit this check',
-    body:  'Click the blue pencil badge to open an edit panel for this step. ' +
-           'You can change the factor it checks, the threshold value, and which patient it favours.',
-    target: '.fft-badge-pencil.fft-badge-tl'
+    title: 'Edit a rule',
+    body:  'The blue drop-downs are the parts you can change: the factor the rule looks at, ' +
+           'and the size of the gap.',
+    target: '.fft-rule select.rule-sel'
   },
   {
-    title: '🗑 Delete this check',
-    body:  'Click the grey trash badge to remove this check from the model entirely. ' +
-           'The remaining checks still run in order.',
+    title: 'Choose which patient',
+    body:  'The box on the YES branch says which patient is chosen when the rule applies. ' +
+           'Click it to switch to the other patient.',
+    target: '.fft-leaf select.rule-sel'
+  },
+  {
+    title: '🗑 Delete this rule',
+    body:  'Click the grey trash badge to remove this rule from the model entirely. ' +
+           'The remaining rules still run in order.',
     target: '.fft-badge-delete'
   },
   {
-    title: '＋ Add a check below',
-    body:  'The green ＋ at the bottom of each step inserts a brand-new check ' +
-           'immediately after it. You can add up to 2 new checks per editing pass.',
+    title: '＋ Add a rule below',
+    body:  'The green ＋ at the bottom of each step inserts a brand-new rule ' +
+           'immediately after it. You can add up to 2 new rules per editing pass.',
     target: '.fft-badge-add.fft-badge-br'
   },
   {
     title: '⠿ Drag to reorder',
-    body:  'Drag the grey grid badge up or down to change this check\'s position in the tree. ' +
-           'Order matters — the model stops at the first check that fires.',
+    body:  'Drag the grey grid badge up or down to change this rule\'s position in the tree. ' +
+           'Order matters — the model stops at the first rule that fires.',
     target: '.fft-badge-grip'
   },
   {
     title: '▲ Move up',
-    body:  'Click the up arrow to shift this check one position earlier in the tree. ' +
-           'Earlier checks are tested first.',
+    body:  'Click the up arrow to shift this rule one position earlier in the tree. ' +
+           'Earlier rules are tested first.',
     target: '.fft-badge-move.fft-badge-tr2'
   },
   {
     title: '▼ Move down',
-    body:  'Click the down arrow to shift this check one position later, ' +
-           'so it only runs if every check above it has already said NO.',
+    body:  'Click the down arrow to shift this rule one position later, ' +
+           'so it only runs if every rule above it has already said NO.',
     target: '.fft-badge-move.fft-badge-tr1'
   },
   {
     title: 'Apply your changes',
     body:  'When you\'re done editing, scroll down and click “Apply changes.” ' +
            'Your edits are saved and the match count updates immediately.',
-    target: '#ts-apply'
+    target: '#ts-apply', screen: 2
   }
 ];
 
@@ -2547,7 +2064,7 @@ function _positionSpotlight(el) {
 
 function _positionTooltip(el) {
   var tt = document.getElementById('spotlight-tooltip');
-  var margin = 14, ttW = 310, ttH = 200;
+  var margin = 14, ttW = 310, ttH = tt.offsetHeight || 200;      // the card's real height (it varies with the text)
   var vw = window.innerWidth, vh = window.innerHeight;
 
   if (!_isTutorialVisible(el)) {
@@ -2559,9 +2076,9 @@ function _positionTooltip(el) {
     return;
   }
   var r = el.getBoundingClientRect();
-  var top = (r.bottom + margin + ttH < vh)
-    ? r.bottom + margin
-    : Math.max(margin, r.top - ttH - margin);
+  var top = (r.bottom + margin + ttH <= vh - margin) ? r.bottom + margin                       // below the target if it fits,
+          : (r.top - ttH - margin >= margin) ? r.top - ttH - margin                              // else above it,
+          : Math.max(margin, vh - ttH - margin);                                                // else as low as the window allows
   var left = r.left + (r.width - ttW) / 2;
   left = Math.max(margin, Math.min(left, vw - ttW - margin));
   top  = Math.max(margin, top);
@@ -2584,6 +2101,7 @@ function _updateSpotlightPositions() {
   _positionTooltip(el);
 }
 
+var _tutStartScreen = 1;
 function renderTutorialStep() {
   var steps = _activeSteps();
   var s = steps[tutorialStep];
@@ -2603,6 +2121,7 @@ function renderTutorialStep() {
     dots.appendChild(d);
   });
 
+  if (s.screen && !FINAL_MODE) StudyStepper.show(s.screen, {force: true, scroll: false});      // show the screen this step is about
   var el = s.target ? document.querySelector(s.target) : null;
   if (el) el.scrollIntoView({block: 'nearest', behavior: 'instant'});
   _updateSpotlightPositions();
@@ -2610,6 +2129,8 @@ function renderTutorialStep() {
 
 function openTutorial(via, context) {
   _tutorialContext = context || 'view';
+  StudyGuide.viewed();
+  _tutStartScreen = FINAL_MODE ? 1 : StudyStepper.current();
   tutorialStep = 0;
   _tutorialOpenedAt = Date.now();
   document.getElementById('spotlight-backdrop').classList.add('visible');
@@ -2622,6 +2143,7 @@ function closeTutorial(via) {
   document.getElementById('spotlight-cut').classList.remove('visible');
   document.getElementById('spotlight-backdrop').classList.remove('visible');
   document.getElementById('spotlight-tooltip').classList.remove('visible');
+  if (!FINAL_MODE) StudyStepper.show(_tutStartScreen, {scroll: false});      // back to where the participant was
   var duration = _tutorialOpenedAt ? Date.now() - _tutorialOpenedAt : null;
   fetch(TUTORIAL_SEEN_URL, {
     method: 'POST',
@@ -2662,12 +2184,7 @@ document.getElementById('tutorial-nudge-open').addEventListener('click', functio
 window.addEventListener('scroll', _updateSpotlightPositions, {passive: true});
 document.getElementById('svg-scroll').addEventListener('scroll', _updateSpotlightPositions, {passive: true});
 
-function startTutorial() {
-  if (TUTORIAL_MODE === 'reminder') {      // never opens by itself: it would cover the introduction. "How to edit" opens it.
-    document.getElementById('tutorial-nudge').classList.add('visible');
-    logEvent('tutorial_reminder_shown', {});
-  }
-}
+function startTutorial() { /* the guide is offered from the Continue button (see StudyGuide); nothing opens by itself */ }
 
 (function() {
   var gate = document.getElementById('btn-intro-continue');
@@ -2683,10 +2200,8 @@ function startTutorial() {
       requestAnimationFrame(function() {
         zoom = 1; render(); fitZoom(true);
         svgScroll.style.visibility = '';    // reveal already at fit zoom
-        if (!sessionStorage.getItem('viewTutorialSeen')) {
-          sessionStorage.setItem('viewTutorialSeen', '1');
-          setTimeout(function() { openTutorial('auto', 'view'); }, 600);
-        }
+        // The guide is offered, never forced: it opens only if the participant chooses to view it.
+        if (TUTORIAL_MODE === 'full' || TUTORIAL_MODE === 'reminder') StudyGuide.offer(TUTORIAL_MODE, function() { openTutorial('offer', 'view'); });
       });
     });
     logEvent('intro_continued', {});
@@ -2719,27 +2234,9 @@ function initEditor(initTree, initParams, initLabels, initNodeExplanations, init
   nodeExplanations   = initNodeExplanations || [];
   summaryExplanation = initSummary || '';
   selectedNode    = null;
-  leafPanelNode   = null;
-  refinePanelNode = null;
-  document.getElementById('edit-panel').style.display    = 'none';
   document.getElementById('default-panel').style.display = 'none';
-  document.getElementById('leaf-panel').classList.remove('visible');
-  document.getElementById('refine-panel').classList.remove('visible');
 
   baselineNodeCount = ((tree && tree.nodes) || []).length;
-
-  // Threshold sliders commit on release, which redraws the tree — dragging
-  // gives a live number without re-laying out the whole tree on every pixel.
-  bindSliderReadout('ep-thr', 'ep-thr-out', updateSVG);
-  bindSliderReadout('rp-thr', 'rp-thr-out', function () {
-    if (refinePanelNode === null) return;
-    var r = tree.nodes[refinePanelNode].refine;
-    if (r) {
-      var tv = parseFloat(document.getElementById('rp-thr').value);
-      if (!isNaN(tv)) { r.threshold = Math.round(tv); _refreshRefineTrueLabels(r, 'rp-out-a', 'rp-out-b'); }
-    }
-    updateSVG();
-  });
 
   render();
   INITIAL_TREE_JSON = JSON.stringify(tree);

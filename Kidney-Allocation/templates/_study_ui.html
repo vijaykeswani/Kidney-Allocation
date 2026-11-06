@@ -74,3 +74,31 @@
   <a class="btn btn-primary study-ui" href="{{ survey_url }}">Continue to a few final questions →</a>
 </div>
 {%- endmacro %}
+
+{# ── Steps shown one screen at a time (see StudyStepper in _study_flow.html) ── #}
+{% macro stepper() -%}
+<nav class="ts-stepper study-ui" id="ts-stepper" aria-label="Steps"></nav>
+{%- endmacro %}
+
+{% macro screen(n, title, preview_id=None) -%}
+<section class="ts-screen" id="ts-screen-{{ n }}" data-screen="{{ n }}"{% if n != 1 %} hidden{% endif %}>
+  <h2 class="ts-screen-title">{{ title }}</h2>
+  {% if preview_id %}<div class="ts-step-preview" id="{{ preview_id }}"></div>{% endif %}
+  {{ caller() }}
+</section>
+{%- endmacro %}
+
+{% macro step_nav() -%}
+<div class="ts-step-nav study-ui" id="ts-step-nav"></div>
+{%- endmacro %}
+
+{# A calm, non-blocking offer of the guide to the controls. It never opens anything by itself (see StudyGuide). #}
+{% macro guide_offer() -%}
+<div class="guide-offer study-ui" id="guide-offer" role="region" aria-label="Guide to the controls" hidden>
+  <span class="guide-text"></span>
+  <span class="guide-actions">
+    <button type="button" class="btn btn-primary" id="guide-view">View the guide</button>
+    <button type="button" class="ts-btn" id="guide-dismiss">Dismiss</button>
+  </span>
+</div>
+{%- endmacro %}

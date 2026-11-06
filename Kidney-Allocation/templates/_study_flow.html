@@ -141,3 +141,103 @@ var StudyReview = (function() {
           actionsHTML: actionsHTML, wireActions: wireActions, done: function() { return count() === cfg.keys.length; }};
 })();
 </script>
+
+<script>
+// One page, several screens: a stepper at the top, Back / Next at the bottom, the current screen kept in the URL
+// (#step2) so the browser's Back button and a refresh both land on the right screen. Going forward can be blocked until
+// the previous screen is finished (canEnter). cfg = {steps:[{label, nextTitle}], canEnter(i), blockedNote(i), teasers:{i:text},
+// onShow(i), final, finalScreens, storageKey}
+var StudyStepper = (function() {
+  'use strict';
+  var cfg = null, cur = 1, ready = false;
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
+  function n() { return cfg.steps.length; }
+  function reachable(i) { return i <= 1 || !cfg.canEnter || !!cfg.canEnter(i); }
+  function furthest() { var m = 1; for (var i = 2; i <= n(); i++) { if (reachable(i)) m = i; else break; } return m; }
+
+  function renderBar() {
+    var bar = $('ts-stepper'); if (!bar) return;
+    var html = '';
+    cfg.steps.forEach(function(st, k) {
+      var i = k + 1, ok = reachable(i);
+      html += (k ? '<span class="ts-stp-line' + (i <= cur ? ' filled' : '') + '"></span>' : '')
+        + '<button type="button" class="ts-stp' + (i === cur ? ' on' : '') + (i < cur ? ' done' : '') + (ok ? '' : ' locked') + '" data-step="' + i + '"'
+        + (ok ? '' : ' disabled title="Finish the previous step first"') + (i === cur ? ' aria-current="step"' : '') + '>'
+        + '<span class="num">' + (i < cur ? '\u2713' : i) + '</span><span class="lbl"><small>Step ' + i + '</small>' + esc(st.label) + '</span></button>';
+    });
+    bar.innerHTML = html;
+    bar.querySelectorAll('.ts-stp').forEach(function(b) { b.addEventListener('click', function() { show(parseInt(b.getAttribute('data-step'), 10), {push: true}); }); });
+  }
+  function renderNav() {
+    var nav = $('ts-step-nav'); if (!nav) return;
+    var hasNext = cur < n(), ok = hasNext && reachable(cur + 1);
+    nav.innerHTML = '<div>' + (cur > 1 ? '<button type="button" class="ts-btn" id="ts-nav-back">\u2190 Back</button>' : '') + '</div>'
+      + '<div class="ts-nav-main">' + (hasNext
+          ? '<div class="ts-nav-note' + (ok ? '' : ' warn') + '">' + esc(ok ? ((cfg.teasers && cfg.teasers[cur]) || '') : (cfg.blockedNote ? cfg.blockedNote(cur + 1) : '')) + '</div>'
+            + '<button type="button" class="btn btn-primary study-ui" id="ts-nav-next"' + (ok ? '' : ' disabled') + '>Next: Step ' + (cur + 1) + ' \u2014 ' + esc(cfg.steps[cur].nextTitle || cfg.steps[cur].label) + ' \u2192</button>'
+          : '') + '</div>';
+    var back = $('ts-nav-back'), next = $('ts-nav-next');
+    if (back) back.addEventListener('click', function() { show(cur - 1, {push: true}); });
+    if (next) next.addEventListener('click', function() { show(cur + 1, {push: true}); });
+  }
+  // opts: push (add a history entry), scroll (default true), force (show even if not yet allowed — used by the tutorial)
+  function show(i, opts) {
+    opts = opts || {};
+    i = Math.max(1, Math.min(n(), i || 1));
+    if (!opts.force && !reachable(i)) i = furthest();
+    cur = i;
+    for (var s = 1; s <= n(); s++) { var el = $('ts-screen-' + s); if (el) el.hidden = (s !== cur); }
+    document.body.setAttribute('data-step', String(cur));
+    document.body.setAttribute('data-last', cur === n() ? '1' : '0');
+    renderBar(); renderNav();
+    try { sessionStorage.setItem(cfg.storageKey || 'ts_step', String(cur)); } catch (e) {}
+    var hash = '#step' + cur;
+    if (location.hash !== hash) { try { (opts.push ? history.pushState : history.replaceState).call(history, {step: cur}, '', location.pathname + location.search + hash); } catch (e) {} }
+    if (cfg.onShow) cfg.onShow(cur);
+    if (opts.scroll !== false) { var top = $('ts-stepper'); if (top && top.scrollIntoView) top.scrollIntoView({behavior: 'smooth', block: 'start'}); }
+  }
+  function init(c) {
+    cfg = c;
+    if (cfg.final) {                     // read-only final page: the screens are simply stacked, no stepper
+      (cfg.finalScreens || [1]).forEach(function(i) { var el = $('ts-screen-' + i); if (el) el.hidden = false; });
+      var bar = $('ts-stepper'); if (bar) bar.hidden = true;
+      return;
+    }
+    var m = (location.hash || '').match(/^#step(\d)$/), saved = 1;
+    try { saved = parseInt(sessionStorage.getItem(cfg.storageKey || 'ts_step'), 10) || 1; } catch (e) {}
+    window.addEventListener('popstate', function() { var mm = (location.hash || '').match(/^#step(\d)$/); show(mm ? parseInt(mm[1], 10) : 1, {scroll: false}); });
+    ready = true;
+    show(m ? parseInt(m[1], 10) : saved, {scroll: false});
+  }
+  function refresh() { if (!ready) return; if (!reachable(cur)) show(furthest(), {scroll: false}); else { renderBar(); renderNav(); } }
+  return {init: init, show: show, refresh: refresh, current: function() { return cur; }, ready: function() { return ready; }};
+})();
+</script>
+
+<script>
+// The guide to the controls is OFFERED, never forced: a notice at the top of Step 1, and the guide opens only if the
+// participant chooses to view it. Shown at most once per participant per browser tab; "How this works" is always there.
+var StudyGuide = (function() {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function key() { return 'ts_guide_' + (window.STUDY_USER || ''); }
+  function settled() { try { return !!sessionStorage.getItem(key()); } catch (e) { return false; } }
+  function mark(v) { try { sessionStorage.setItem(key(), v); } catch (e) {} }
+  function log(name, d) { if (typeof logEvent === 'function') logEvent(name, d || {}); }
+  function hide() { var el = $('guide-offer'); if (el) el.hidden = true; }
+  function offer(mode, openGuide) {
+    var el = $('guide-offer');
+    if (!el || settled()) return;
+    el.querySelector('.guide-text').textContent = mode === 'reminder'
+      ? 'A guide to the controls on this page is available if you wish to review it.'
+      : 'A brief guide to the controls on this page is available.';
+    el.hidden = false;
+    log('tutorial_offered', {mode: mode});
+    $('guide-view').onclick = function() { mark('viewed'); hide(); openGuide(); };
+    $('guide-dismiss').onclick = function() { mark('dismissed'); hide(); log('tutorial_dismissed', {}); };
+  }
+  function viewed() { mark('viewed'); hide(); }        // the guide was opened some other way ("How this works")
+  return {offer: offer, viewed: viewed};
+})();
+</script>

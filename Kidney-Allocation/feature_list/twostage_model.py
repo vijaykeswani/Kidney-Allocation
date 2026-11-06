@@ -28,7 +28,7 @@ import numpy as np
 import features
 
 # Strength buckets 0 (off) .. 3 (a lot) -> score multiplier.
-AMP = [0.0, 1.0, 2.0, 3.0]   # strengths 1/2/3 = "a little"/"somewhat"/"a lot", evenly spaced so the on-screen scale is the actual weight
+AMP = [0.0, 1.0, 2.0, 3.0, 4.0]   # strengths 1/2/3/4 = "a little"/"somewhat"/"a lot"/"a great deal", evenly spaced so the on-screen scale IS the weight (trained models only use 1-3; 4 is an extra-strong choice the participant can make)
 GAIN = 0.9          # sharpness of the "weighted"/"prominent" verdict sigmoid
 TALLY_GAIN = 0.95   # sharpness of the "tally" verdict sigmoid
 
@@ -267,21 +267,18 @@ def _default_model():
 
 def _amp_for(matters):
     """
-    AMP[1..3] ("a little"/"somewhat"/"a lot") as fixed anchor points, with the
-    fine-grained strength slider (see twostage.html/twostage_v2.html) able to
-    land anywhere between them — the three buttons sit at equal 1-unit steps
-    on that same 1..3 scale, so a slider drag just linearly interpolates
-    between whichever two buttons it's currently between.
+    Weight for a strength setting. The buttons sit at 1/2/3/4 ("a little" / "somewhat" / "a lot" / "a great deal") on a
+    continuous scale; the fine-grained slider interpolates linearly between whichever two buttons it is between.
+    Mirrors ampFor() in the page's JavaScript exactly.
     """
     if matters <= 0:
         return 0.0
     if matters <= 1:
         return AMP[1] * matters
-    if matters >= 3:
-        return AMP[3]
-    if matters <= 2:
-        return AMP[1] + (AMP[2] - AMP[1]) * (matters - 1)
-    return AMP[2] + (AMP[3] - AMP[2]) * (matters - 2)
+    if matters >= 4:
+        return AMP[4]
+    lo = int(matters)
+    return AMP[lo] + (AMP[lo + 1] - AMP[lo]) * (matters - lo)
 
 
 def edit_value(model, key, v):

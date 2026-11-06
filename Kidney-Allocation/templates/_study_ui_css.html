@@ -36,6 +36,36 @@
 .ts-rv-modnote { font-size: 12.5px; color: var(--text-secondary); margin-top: 10px; }
 .ts-flag-note { width: 100%; box-sizing: border-box; margin-top: 10px; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; resize: vertical; }
 .ts-review-bar { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; font-size: 13px; color: var(--text-secondary); }
+/* the steps, one screen at a time */
+.ts-stepper { display: flex; align-items: center; margin: 4px 0 22px; padding: 10px 12px; background: #fff; border: 1px solid var(--border); border-radius: 14px; }
+.ts-stepper[hidden] { display: none; }
+.ts-stp { display: flex; align-items: center; gap: 10px; background: none; border: none; padding: 6px 12px; border-radius: 10px; font-family: inherit; cursor: pointer; color: var(--text-secondary); text-align: left; }
+.ts-stp .num { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; background: var(--surface-alt); color: var(--text-muted); flex-shrink: 0; }
+.ts-stp .lbl { display: flex; flex-direction: column; font-size: 14px; font-weight: 600; line-height: 1.25; }
+.ts-stp .lbl small { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.ts-stp.on { background: var(--accent-soft); color: var(--accent-hover); }
+.ts-stp.on .num { background: var(--accent); color: #fff; }
+.ts-stp.on .lbl small { color: var(--accent); }
+.ts-stp.done .num { background: var(--patient-a); color: #fff; }
+.ts-stp.locked { opacity: .55; cursor: not-allowed; }
+.ts-stp-line { flex: 1; height: 2px; background: var(--border); margin: 0 4px; min-width: 14px; }
+.ts-stp-line.filled { background: var(--accent); }
+.guide-offer { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin: 0 0 18px; font-size: 14px; color: #1e3a8a; }
+.guide-offer[hidden] { display: none; }
+.guide-actions { display: inline-flex; align-items: center; gap: 10px; }
+.guide-offer .btn { min-height: 36px; padding: 6px 16px; font-size: 14px; }
+body[data-step="2"] #guide-offer, body[data-step="3"] #guide-offer { display: none; }
+.ts-screen { margin-bottom: 22px; }
+.ts-screen[hidden] { display: none !important; }
+.ts-screen-title { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; color: #0f172a; }
+.ts-step-preview { font-size: 14px; color: #475569; margin: 0 0 14px; }
+.ts-step-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 20px 0 8px; flex-wrap: wrap; }
+.ts-nav-main { display: flex; align-items: center; gap: 14px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.ts-nav-note { font-size: 13px; color: var(--text-muted); max-width: 340px; text-align: right; }
+.ts-nav-note.warn { color: #9a3412; }
+body[data-step="2"] #ts-intro, body[data-step="3"] #ts-intro { display: none; }
+body[data-last="0"] #ts-summary-wrap { display: none; }      /* the plain-words summary belongs to the LAST step only */
+@media (max-width: 640px) { .ts-stp .lbl small { display: none; } .ts-stp { padding: 6px; } }
 .study-sub + .study-sub { margin-top: 12px; }
 .study-sub { font-size: 15px; line-height: 1.6; color: var(--text-secondary); margin: 0; }
 .study-actions { display:flex; gap:12px; margin:22px 0; }

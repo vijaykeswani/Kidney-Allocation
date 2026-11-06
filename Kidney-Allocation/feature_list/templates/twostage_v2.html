@@ -282,17 +282,26 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 #ts-feat-next { background: var(--accent); border-color: var(--accent); color: #fff; }
 #ts-feat-next:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 
-/* ── Wider canvas (matches decision tree page at 1440px) ───────────── */
-.wrap { max-width: 1440px; padding: 36px 24px 48px; }
-.study-header { max-width: 860px; }
-.ts-v2-layout { grid-template-columns: 280px 1fr; gap: 28px; }
-.ts-acc-head { grid-template-columns: 250px 1fr 140px 148px; gap: 16px; }
+/* a factor opens in an overlay */
+.fp-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 200; }
+.fp-dialog { background: #fff; border-radius: 16px; width: 100%; max-width: 780px; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(15,23,42,.28); }
+.fp-header { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.fp-title { font-size: 18px; font-weight: 700; flex: 1; }
+.fp-live { font-size: 13px; font-weight: 600; color: var(--patient-a); background: var(--patient-a-soft); padding: 4px 12px; border-radius: 999px; white-space: nowrap; }
+.fp-close { font-size: 15px; color: var(--text-muted); background: none; border: none; cursor: pointer; width: 30px; height: 30px; border-radius: 6px; }
+.fp-close:hover { background: var(--surface); }
+.fp-body { padding: 4px 22px 22px; overflow-y: auto; }
+.fp-body .ts-card { border: none; padding: 14px 0 0; background: none; }
+.fp-body svg.ts-linechart { max-width: 460px; display: block; margin: 0 auto; }
+.fp-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 18px; }
+.fp-actions-right { display: flex; align-items: center; gap: 10px; }
+.ts-acc-head { cursor: pointer; }
 </style>
 {% endblock %}
 {% block content %}
-{% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue %}
+{% from "_study_ui.html" import page_header, match_panel, step, summary_card, actions, rating, lock_in, final_continue, stepper, screen, step_nav, guide_offer %}
 
-{% if not final_mode %}{{ page_header(past_scenarios_json | length) }}{% else %}{{ match_panel() }}{% endif %}
+{% if not final_mode %}<div id="ts-intro">{{ page_header(past_scenarios_json | length) }}</div>{% else %}{{ match_panel() }}{% endif %}
 
 {% if not final_mode %}
 <div id="ts-intro-continue-wrap" class="study-ui" style="margin-top:24px;">
@@ -304,10 +313,12 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
 {% include "_study_flow.html" %}
 
 <div id="ts-main-content" {% if not final_mode %}hidden{% endif %}>
+{% if not final_mode %}{{ stepper() }}
+{{ guide_offer() }}{% endif %}
 
-{% call step(1, "Step 1. Approve or modify which factors matter, and by how much", open=True) %}
+{% call screen(1, "Step 1. Approve or modify which factors matter, and by how much", "ts-step1-preview") %}
   <div class="ts-step-sub">
-    {% if not final_mode %}Click on each factor below to open it and see how the model thinks you consider it. Change its settings so the model better reflects how you make your judgments. When you are done with a factor, tell us whether it matches how you decide — or, if it doesn’t and these options can’t fix it, say so. You need to review every factor.{% else %}Click on a factor to see how the model treats it.{% endif %}
+    {% if not final_mode %}<b>Click each factor below to open and review it.</b> You will see how the model thinks you consider it. Change its settings so the model better reflects how you make your judgments. When you are done with a factor, tell us whether it matches how you decide — or, if it doesn’t and these options can’t fix it, say so. You need to review every factor.{% else %}Click on a factor to see how the model treats it.{% endif %}
   </div>
   <div class="ts-legend" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <span><b class="up">↑ Rise</b> = favors the patient &nbsp;·&nbsp; <b class="down">↓ Fall</b> = counts against them &nbsp;·&nbsp; flat = no difference</span>
@@ -317,25 +328,42 @@ body.final-mode .ts-feat-item:not(.active) { opacity: .6; }
   <div class="ts-feat-list" id="ts-feat-list"></div>
 {% endcall %}
 
-{% call step(2, "Step 2. Approve or modify how to consider those factors together") %}
+{% call screen(2, "Step 2. Approve or modify how to consider those factors together", "ts-step2-preview") %}
   <div class="ts-step-sub">
     {% if not final_mode %}Pick the approach that best matches how you make a final call when multiple factors point different ways.{% endif %}
   </div>
   <div id="ts-agg"></div>
 {% endcall %}
 
-{{ summary_card() }}
+<div id="ts-summary-wrap">{{ summary_card() }}</div>
 
 {% if not final_mode %}
 {{ match_panel() }}
+
+{% call screen(3, "Step 3. Rate your model and lock it in") %}
 {{ actions(has_override) }}
 {{ rating() }}
 {{ lock_in() }}
+{% endcall %}
+
+{{ step_nav() }}
 {% else %}
 {{ final_continue(survey_url) }}
 {% endif %}
 
 </div><!-- end #ts-main-content -->
+
+<!-- A factor opens in an overlay (same idea as "See how your model performs") -->
+<div class="fp-backdrop" id="fp-backdrop">
+  <div class="fp-dialog" role="dialog" aria-modal="true" aria-labelledby="fp-title">
+    <div class="fp-header">
+      <div class="fp-title" id="fp-title"></div>
+      <div class="fp-live" id="fp-live"></div>
+      <button class="fp-close" id="fp-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="fp-body" id="ts-features"></div>
+  </div>
+</div>
 
 <!-- Tutorial nudge (reminder bar) -->
 <div class="tutorial-nudge study-ui" id="tutorial-nudge">
@@ -409,6 +437,7 @@ var FEATURES_DATA = {{ features_json | tojson }};
 // Model logic ALWAYS uses this fixed order (so a tie in "most important decides" resolves exactly as it does on the server);
 // FEATURES_DATA is only the participant's presentation order.
 var CANON_KEYS = {{ canon_keys | tojson }};
+var STUDY_USER = {{ (session.get('username') or '') | tojson }};   // scopes what is remembered in this browser tab to one participant
 var REQUIRE_REVIEW = true;   // lock-in stays unavailable until every factor is approved or modified (set false to switch off)
 // A factor's name with its (i) icon glued to the last word, so the icon never wraps onto a line of its own.
 function labelHTML(f) {
@@ -436,7 +465,7 @@ var FINAL_EDITED = {{ final_edited | tojson }};
 var FINAL_ARM = {{ final_arm | tojson }};
 var INITIAL_MODEL_JSON = null;     // snapshot at page load, to know whether there are unsaved edits
 
-var AMP = [0, 1.0, 2.0, 3.0];   // strengths 1/2/3 = a little / somewhat / a lot: the on-screen scale IS the weight
+var AMP = [0, 1.0, 2.0, 3.0, 4.0];   // strengths 1/2/3/4 = a little / somewhat / a lot / a great deal: the on-screen scale IS the weight
 var GAIN = 0.9, TALLY_GAIN = 0.95;
 
 // Mirrors twostage_model._amp_for in Python exactly: the "a little"/
@@ -446,9 +475,9 @@ var GAIN = 0.9, TALLY_GAIN = 0.95;
 function ampFor(matters) {
   if (matters <= 0) return 0;
   if (matters <= 1) return AMP[1] * matters;
-  if (matters >= 3) return AMP[3];
-  if (matters <= 2) return AMP[1] + (AMP[2] - AMP[1]) * (matters - 1);
-  return AMP[2] + (AMP[3] - AMP[2]) * (matters - 2);
+  if (matters >= 4) return AMP[4];
+  var lo = Math.floor(matters);
+  return AMP[lo] + (AMP[lo + 1] - AMP[lo]) * (matters - lo);
 }
 
 function editValueFor(st, key, v) {
@@ -467,7 +496,7 @@ function editValue(key, v) { return editValueFor(model.features[key], key, v); }
 //    a literal height change and editing one feature never rescales another's chart.
 // 2. The setting a feature had a moment ago stays on the chart as a faint dashed ghost.
 // 3. Next to the controls, a readout says how the edit changed how many of your answers match.
-var CHART_MAX = AMP[3];
+var CHART_MAX = AMP[4];
 var tsGhost = null;   // {key, st, noAnim}
 var tsDelta = null;   // {key, from, to}   (key '__agg' = the combine-rule choice)
 var tsDrag = null;    // while a slider is dragged, the whole drag counts as one edit
@@ -500,9 +529,9 @@ function infoIcon(key) {
 }
 function strengthBar(key) {
   var st = model.features[key];
-  return '<span class="ts-mini"><i class="' + (st.matters === 0 ? '' : st.dir) + '" style="width:' + (st.matters === 0 ? 0 : Math.min(100, st.matters / 3 * 100)).toFixed(0) + '%"></i></span>';
+  return '<span class="ts-mini"><i class="' + (st.matters === 0 ? '' : st.dir) + '" style="width:' + (st.matters === 0 ? 0 : Math.min(100, st.matters / 4 * 100)).toFixed(0) + '%"></i></span>';
 }
-function strengthWordFor(m) { return m < 1.5 ? 'a little' : (m < 2.5 ? 'somewhat' : 'a lot'); }
+function strengthWordFor(m) { return m < 1.5 ? 'a little' : (m < 2.5 ? 'somewhat' : (m < 3.5 ? 'a lot' : 'a great deal')); }
 function renderFinalHeader(n, current) {
   StudyFlow.finalHeader({n: n, current: current, baseline: BASELINE_MATCHES, edited: FINAL_EDITED, arm: FINAL_ARM});
 }
@@ -707,7 +736,7 @@ function drawStrip(key, gmax) {
 
 // v2 draws the underlying CURVE (not just dots), on a fixed vertical scale, with the "counts" region shaded
 // for a cutoff — so a straight line, a bend and a step look genuinely different.
-var LC = {W: 300, H: 176, padL: 16, padR: 62, base: 84, amp: 56, labY: 166};
+var LC = {W: 316, H: 176, padL: 16, padR: 78, base: 84, amp: 56, labY: 166};
 function lcX(key, v) { var r = FEATURE_RANGES[key]; return LC.padL + (v - r.min) / (r.max - r.min) * (LC.W - LC.padL - LC.padR); }
 function lcY(s) { return LC.base - (Math.max(-CHART_MAX, Math.min(CHART_MAX, s)) / CHART_MAX) * LC.amp; }
 function curvePath(key, st) {
@@ -726,7 +755,7 @@ function drawLine(key, ghost, preview) {
   var st = model.features[key], r = FEATURE_RANGES[key], vals = repValues(key), s = '';
   var color = st.matters === 0 ? 'var(--border-strong)' : (st.dir === 'favor' ? 'var(--patient-a)' : 'var(--patient-b)');
   var x0 = LC.padL, x1 = LC.W - LC.padR;
-  [[AMP[1], 'a little'], [AMP[2], 'somewhat'], [AMP[3], 'a lot']].forEach(function(g) {
+  [[AMP[1], 'a little'], [AMP[2], 'somewhat'], [AMP[3], 'a lot'], [AMP[4], 'a great deal']].forEach(function(g) {
     s += '<line x1="' + x0 + '" y1="' + lcY(g[0]).toFixed(1) + '" x2="' + x1 + '" y2="' + lcY(g[0]).toFixed(1) + '" class="ts-guide"/>'
        + '<line x1="' + x0 + '" y1="' + lcY(-g[0]).toFixed(1) + '" x2="' + x1 + '" y2="' + lcY(-g[0]).toFixed(1) + '" class="ts-guide"/>'
        + '<text x="' + (x1 + 6) + '" y="' + (lcY(g[0]) + 3).toFixed(1) + '" class="ts-guide-lab">' + g[1] + '</text>';
@@ -981,6 +1010,7 @@ function renderSummary() {
   var current = n ? matchCount() : 0;
   document.getElementById('ts-match-num').textContent = n ? current : '\u2013';
   var ix = document.getElementById('ts-intro-x'); if (ix) ix.textContent = n ? current : '\u2013';
+  var fl = document.getElementById('fp-live'); if (fl) fl.textContent = n ? 'Matches ' + current + ' of ' + n + ' of your cases' : '';
   document.getElementById('ts-match-line').textContent = n
     ? ('The model matches your choices in ' + current + ' of ' + n + ' cases.')
     : '';
@@ -1001,7 +1031,8 @@ function renderSummary() {
 function strengthWord(matters) {
   if (matters < 1.5) return 'a little';
   if (matters < 2.5) return 'somewhat';
-  return 'a lot';
+  if (matters < 3.5) return 'a lot';
+  return 'a great deal';
 }
 function compactFeatureBit(key) {
   var st = model.features[key];
@@ -1042,7 +1073,7 @@ var tsSelectedFeature = (FEATURES_DATA[0] || {}).key;
 function weightFigure(key) {
   var st = model.features[key];
   var inner = st.matters === 0 ? '<i class="ts-wf-tick"></i>'
-    : '<i class="ts-wf-bar ' + st.dir + '" style="width:' + (Math.min(1, ampFor(st.matters) / 3) * 50).toFixed(1) + '%"></i>';
+    : '<i class="ts-wf-bar ' + st.dir + '" style="width:' + (Math.min(1, ampFor(st.matters) / 4) * 50).toFixed(1) + '%"></i>';
   return '<span class="ts-wf" aria-hidden="true"><i class="ts-wf-mid"></i>' + inner + '</span>';
 }
 function weightNote(key) {
@@ -1052,7 +1083,7 @@ function weightNote(key) {
 function reviewTag(key) {
   if (FINAL_MODE) return '<span></span>';
   var r = StudyReview.get(key);
-  return r === 'approved' ? '<span class="ts-rv approved">\u2713 Matches</span>' : r === 'modified' ? '<span class="ts-rv modified">Modified</span>' : r === 'flagged' ? '<span class="ts-rv flagged">Doesn\u2019t fit</span>' : '<span class="ts-rv todo">Click to review \u25be</span>';
+  return r === 'approved' ? '<span class="ts-rv approved">\u2713 Matches</span>' : r === 'modified' ? '<span class="ts-rv modified">Modified</span>' : r === 'flagged' ? '<span class="ts-rv flagged">Doesn\u2019t fit</span>' : '<span class="ts-rv todo">Click to review \u2192</span>';
 }
 function accHeadHTML(f) {
   var st = model.features[f.key];
@@ -1080,13 +1111,8 @@ function renderFeatList() {
     var head = document.createElement('button');
     head.type = 'button'; head.className = 'ts-acc-head'; head.setAttribute('data-key', f.key); head.setAttribute('aria-expanded', open ? 'true' : 'false');
     head.innerHTML = accHeadHTML(f);
-    head.addEventListener('click', function() {
-      tsSelectedFeature = open ? null : f.key; tsGhost = null; tsDelta = null; refresh();
-      var el = document.querySelector('.ts-acc-item[data-key="' + f.key + '"]');
-      if (el && !open) el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-    });
+    head.addEventListener('click', function() { tsSelectedFeature = f.key; tsGhost = null; tsDelta = null; refresh(); });   // opens the factor's overlay
     item.appendChild(head);
-    if (open) { var body = document.createElement('div'); body.className = 'ts-acc-body'; body.id = 'ts-features'; item.appendChild(body); }
     list.appendChild(item);
   });
 }
@@ -1094,17 +1120,26 @@ function renderFeatList() {
 // Shape (and Cutoff, for "only past a point") are always shown for a factor that matters, next to Direction and Strength.
 var tsExceptOpen = {};
 
+function closeFactorOverlay() { tsSelectedFeature = null; tsGhost = null; tsDelta = null; refresh(); }
+(function() {
+  var bd = document.getElementById('fp-backdrop');
+  document.getElementById('fp-close').addEventListener('click', closeFactorOverlay);
+  bd.addEventListener('click', function(e) { if (e.target === bd) closeFactorOverlay(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && tsSelectedFeature) closeFactorOverlay(); });
+})();
+
 function renderFeatures() {
   renderFeatList();
-  var host = document.getElementById('ts-features');
-  if (!host) return;            // nothing is open
-  host.innerHTML = '';
-  var gmax = globalMax();
+  var host = document.getElementById('ts-features'), bd = document.getElementById('fp-backdrop');
   var list = orderedFeatures();
   var idx = list.findIndex(function(f) { return f.key === tsSelectedFeature; });
-  if (idx === -1) idx = 0;
+  if (!host || !bd || idx === -1) { if (bd) bd.style.display = 'none'; document.body.style.overflow = ''; return; }   // nothing is open
+  bd.style.display = 'flex'; document.body.style.overflow = 'hidden';
+  host.innerHTML = '';
+  var gmax = globalMax();
   var f = list[idx];
-  if (!f) return;
+  host.setAttribute('data-key', f.key);
+  document.getElementById('fp-title').textContent = flabel(f);
   var st = model.features[f.key];
   var r = FEATURE_RANGES[f.key];
   var card = document.createElement('div');
@@ -1139,11 +1174,12 @@ function renderFeatures() {
       + btn('str', f.key, '1', 'a little', Math.abs(st.matters - 1) < 0.05)
       + btn('str', f.key, '2', 'somewhat', Math.abs(st.matters - 2) < 0.05)
       + btn('str', f.key, '3', 'a lot', Math.abs(st.matters - 3) < 0.05)
+      + btn('str', f.key, '4', 'a great deal', Math.abs(st.matters - 4) < 0.05)
       + '</div></div>';
     html += '<div class="ts-row ts-strength-slider-row"><div class="ts-slider-wrap">'
-      + '<input type="range" class="ts-strength-slider" min="1" max="3" step="0.1" value="' + st.matters + '" data-key="' + f.key + '" style="--f:' + ((st.matters - 1) / 2).toFixed(3) + '"' + (FINAL_MODE ? ' disabled' : '') + '>'
-      + '<div class="ts-ticks"><span style="--f:0">1<small>a little</small></span><span style="--f:0.5">2<small>somewhat</small></span><span style="--f:1">3<small>a lot</small></span></div></div>'
-      + '<span class="ts-strength-val">strength <b id="ts-sval-' + f.key + '">' + st.matters.toFixed(1) + '</b> of 3</span></div>'
+      + '<input type="range" class="ts-strength-slider" min="1" max="4" step="0.1" value="' + st.matters + '" data-key="' + f.key + '" style="--f:' + ((st.matters - 1) / 3).toFixed(3) + '"' + (FINAL_MODE ? ' disabled' : '') + '>'
+      + '<div class="ts-ticks"><span style="--f:0">1<small>a little</small></span><span style="--f:0.333">2<small>somewhat</small></span><span style="--f:0.667">3<small>a lot</small></span><span style="--f:1">4<small>a great deal</small></span></div></div>'
+      + '<span class="ts-strength-val">strength <b id="ts-sval-' + f.key + '">' + st.matters.toFixed(1) + '</b> of 4</span></div>'
       + (FINAL_MODE ? '' : '<div class="ts-slider-hint">Use the slider for more detailed values between the numbers.</div>');
   }
 
@@ -1165,15 +1201,16 @@ function renderFeatures() {
     StudyReview.wireActions(rv, f.key, refresh);
   }
   var nav = document.createElement('div');
-  nav.className = 'ts-v2-nav ts-acc-actions';
-  nav.innerHTML = '<span></span>' + (idx < list.length - 1 ? '<button type="button" class="ts-btn" id="ts-feat-next">Next factor \u2192</button>' : '<span></span>');
+  nav.className = 'ts-v2-nav fp-actions';
+  nav.innerHTML = (idx > 0 ? '<button type="button" class="ts-btn" id="ts-feat-prev">\u2190 Previous factor</button>' : '<span></span>')
+    + '<span class="fp-actions-right">' + (idx < list.length - 1 ? '<button type="button" class="ts-btn" id="ts-feat-next">Next factor \u2192</button>' : '')
+    + '<button type="button" class="btn btn-primary" id="ts-feat-done">Done</button></span>';
   host.appendChild(nav);
-  var nextBtn = document.getElementById('ts-feat-next');
-  if (nextBtn) nextBtn.addEventListener('click', function() {
-    tsSelectedFeature = list[idx + 1].key; tsGhost = null; tsDelta = null; refresh();
-    var el = document.querySelector('.ts-acc-item[data-key="' + tsSelectedFeature + '"]');
-    if (el) el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-  });
+  function goTo(k) { tsSelectedFeature = list[k].key; tsGhost = null; tsDelta = null; refresh(); var hb = document.getElementById('ts-features'); if (hb) hb.scrollTop = 0; }
+  var prevBtn = document.getElementById('ts-feat-prev'), nextBtn = document.getElementById('ts-feat-next');
+  if (prevBtn) prevBtn.addEventListener('click', function() { goTo(idx - 1); });
+  if (nextBtn) nextBtn.addEventListener('click', function() { goTo(idx + 1); });
+  document.getElementById('ts-feat-done').addEventListener('click', closeFactorOverlay);
 
   if (!FINAL_MODE) {
     host.querySelectorAll('[data-dir]').forEach(function(b) {
@@ -1196,7 +1233,7 @@ function renderFeatures() {
     });
     host.querySelectorAll('.ts-strength-slider').forEach(function(inp) {
       var key = inp.getAttribute('data-key');
-      inp.addEventListener('input', function() { inp.style.setProperty('--f', ((parseFloat(inp.value) - 1) / 2).toFixed(3)); sliderEdit(key, parseFloat(inp.value)); });
+      inp.addEventListener('input', function() { inp.style.setProperty('--f', ((parseFloat(inp.value) - 1) / 3).toFixed(3)); sliderEdit(key, parseFloat(inp.value)); });
       inp.addEventListener('change', resort);
       inp.addEventListener('change', function() { sliderDone(key); });
     });
@@ -1318,7 +1355,10 @@ function renderAgg() {
 
 function refresh() {
   if (tsSelectedFeature !== tsLastSelected) { tsOrderCache = null; tsLastSelected = tsSelectedFeature; }   // re-sort when opening/closing a factor, not mid-edit
+  var fb0 = document.getElementById('ts-features'), keepTop = fb0 ? fb0.scrollTop : 0, keepKey = fb0 ? fb0.getAttribute('data-key') : null;
   renderFeatures();
+  var fb1 = document.getElementById('ts-features');
+  if (fb1 && keepKey && fb1.getAttribute('data-key') === keepKey) fb1.scrollTop = keepTop;       // an edit shouldn't throw the overlay back to the top
   renderAgg();
   tsGhost = null;
   renderSummary();
@@ -1343,17 +1383,7 @@ function renderStepPreviews() {
   document.getElementById('ts-step2-preview').textContent = 'Currently: The model thinks you ' + aggLabel + '.';
 }
 
-function toggleStep(n) { StudyFlow.toggleStep(n); }
-var _firstStepOpen = true;
-StudyFlow.steps(function(n) {
-  if (n === 1 && _firstStepOpen && !FINAL_MODE) {
-    _firstStepOpen = false;
-    if (!sessionStorage.getItem('featTutorialSeen')) {
-      sessionStorage.setItem('featTutorialSeen', '1');
-      setTimeout(function() { openTutorial('first_step_open'); }, 400);
-    }
-  }
-});
+// (the steps are screens now: see StudyStepper)
 
 if (!FINAL_MODE) {
   StudyFlow.init({
@@ -1374,22 +1404,20 @@ if (!FINAL_MODE) {
 INITIAL_MODEL_JSON = JSON.stringify(model);
 var _pageLoadMatchCount = matchCount();
 StudyReview.init({
-  keys: FEATURES_DATA.map(function(x) { return x.key; }), storageKey: 'ts_review_v2', required: !FINAL_MODE && REQUIRE_REVIEW,
+  keys: FEATURES_DATA.map(function(x) { return x.key; }), storageKey: 'ts_review_v2_' + STUDY_USER, required: !FINAL_MODE && REQUIRE_REVIEW,
   hint: 'click each factor below to review it',
   gateText: function(n, total) { return 'Before you lock in, please review each factor in Step 1 (' + n + ' of ' + total + ' done): open it, then tell us whether it matches how you decide.'; },
-  onChange: function() { if (typeof updateAccHeads === 'function') updateAccHeads(); }
+  onChange: function() { if (typeof updateAccHeads === 'function') updateAccHeads(); if (typeof StudyStepper !== 'undefined' && StudyStepper.ready()) StudyStepper.refresh(); }
 });
 tsSelectedFeature = null;      // every factor starts collapsed: the list shows the whole model at a glance
 refresh();
-if (FINAL_MODE) { toggleStep(2); }                 // step 1 is open by default
-// Pulse the Step 1 header to signal it's interactive
-(function() {
-  var card = document.getElementById('ts-step1-toggle');
-  if (card) {
-    card.classList.add('ts-step-card-pulse');
-    card.addEventListener('animationend', function() { card.classList.remove('ts-step-card-pulse'); }, {once: true});
-  }
-})();
+StudyStepper.init({
+  final: FINAL_MODE, finalScreens: [1, 2], storageKey: 'ts_step_' + STUDY_USER,
+  steps: [{label: 'Factors'}, {label: 'Combining', nextTitle: 'how the factors combine'}, {label: 'Rate & lock in', nextTitle: 'rate and lock in'}],
+  canEnter: function() { return StudyReview.done(); },                 // Step 2 and 3 open once every factor has been reviewed
+  blockedNote: function() { return 'Review all ' + FEATURES_DATA.length + ' factors to continue (' + StudyReview.count() + ' of ' + FEATURES_DATA.length + ' done).'; },
+  teasers: {1: 'Next, in Step 2, you will choose how these factors are combined.', 2: 'Next, in Step 3, you will rate how well this matches your thinking and lock in your model.'}
+});
 
 // ── Spotlight tutorial ────────────────────────────────────────────
 var TUTORIAL_SEEN_URL = {{ tutorial_seen_url | tojson }};
@@ -1397,57 +1425,57 @@ var TUTORIAL_MODE = {{ tutorial_mode | tojson }};
 
 var TUTORIAL_STEPS = [
   {
-    title: 'Step 1 — click the header to expand or collapse',
-    body:  'The blue “Step 1” card is clickable — tap it any time to hide or show ' +
-           'the factor list. It starts open so you can see and edit your model straight away.',
-    target: '#ts-step1-toggle'
+    title: 'Three steps',
+    body:  'There are three steps, shown at the top: 1 Factors, 2 Combining, 3 Rate & lock in. ' +
+           'Use “Next” and “Back” at the bottom to move between them.',
+    target: '#ts-stepper', screen: 1
   },
   {
     title: 'Open a factor',
     body:  'Click any factor in the list to open it and see how the model currently treats it. ' +
            'The chart shows how much it helps or hurts a patient as the value rises.',
-    target: '#ts-feat-list'
+    target: '#ts-feat-list', screen: 1
   },
   {
     title: 'Set the direction',
     body:  'Choose “↑ Helps them” if more of this factor is better, ' +
            '“↓ Counts against them” if more is worse, or ' +
            '“Doesn’t matter” to remove it from the model.',
-    target: '#ts-features'
+    target: '#ts-features', screen: 1
   },
   {
     title: 'Set the strength',
-    body:  'Use “a little / somewhat / a lot” to control how strongly this factor ' +
+    body:  'Use “a little / somewhat / a lot / a great deal” to control how strongly this factor ' +
            'influences the final score. The slider lets you set any value in between.',
-    target: '#ts-features'
+    target: '#ts-features', screen: 1
   },
   {
-    title: 'Approve or modify every factor',
+    title: 'Review every factor',
     body:  'For each factor, change its settings if needed, then tell us whether it matches how you decide. If it doesn’t match and the options can’t fix it, you can say so. ' +
-           'You need to review every factor before you can lock in your model.',
-    target: '#ts-review-progress'
+           'You need to review every factor before you can go on to Step 2.',
+    target: '.ts-rv-actions', screen: 1
+  },
+  {
+    title: 'See how your model performs',
+    body:  'On every step, this card shows how many of your 20 answers the model matches. ' +
+           'Click it to see each case, or to try out your own.',
+    target: '#ts-match-panel', screen: 1
   },
   {
     title: 'Step 2 — how factors combine',
-    body:  'Click the “Step 2” header to choose how the model weighs all factor scores ' +
-           'together when multiple factors point different ways.',
-    target: '#ts-step2-toggle'
-  },
-  {
-    title: 'Pick your combining approach',
     body:  '“Balance all the factors” — each factor tips a single scale. “Count how many” — each factor gets one vote. ' +
            '“The most important decides” — only the top factor matters.',
-    target: '#ts-agg'
+    target: '#ts-agg', screen: 2
   },
   {
-    title: 'Apply changes',
-    body:  'When you’re happy with your edits, click “Apply changes.” ' +
-           'The match count updates immediately to show how well the revised model fits your past answers.',
-    target: '#ts-apply'
+    title: 'Step 3 — rate and lock in',
+    body:  'Rate how well the model matches your thinking, then lock it in. ' +
+           'You can also “Apply changes” to save your edits and see the new match count.',
+    target: '#ts-score-row', screen: 3
   }
 ];
 
-var _tutorialStep = 0;
+var _tutorialStep = 0, _tutStartScreen = 1;
 var _tutorialOpenedAt = null;
 
 function _isTutorialVisible(el) {
@@ -1492,16 +1520,18 @@ function renderTutorialStep() {
     d.className = 'tutorial-dot' + (i === _tutorialStep ? ' on' : '');
     dots.appendChild(d);
   });
-  if (s.target === '#ts-features' && !document.getElementById('ts-features')) { tsSelectedFeature = orderedFeatures()[0].key; refresh(); }   // open a factor so there is something to point at
+  var inOverlay = /ts-features|ts-rv-actions/.test(s.target || '');
+  if (s.screen && !FINAL_MODE) StudyStepper.show(s.screen, {force: true, scroll: false});      // show the screen this step is about
+  if (inOverlay && !tsSelectedFeature) { tsSelectedFeature = orderedFeatures()[0].key; refresh(); }   // open a factor so there is something to point at
+  if (!inOverlay && tsSelectedFeature) { tsSelectedFeature = null; refresh(); }                      // and close it again for the other steps
   var el = s.target ? document.querySelector(s.target) : null;
-  // If the target sits inside a collapsed step card, open that card first so the spotlight has something to point at.
-  var holder = el && el.closest('.ts-step-body');
-  if (holder && !holder.classList.contains('open')) { var m = /ts-step(\d)-body/.exec(holder.id); if (m) StudyFlow.toggleStep(parseInt(m[1], 10)); }
   if (el) el.scrollIntoView({block: 'nearest', behavior: 'instant'});
   _updateSpotlightPositions();
 }
 function openTutorial(via) {
   _tutorialStep = 0; _tutorialOpenedAt = Date.now();
+  StudyGuide.viewed();
+  _tutStartScreen = FINAL_MODE ? 1 : StudyStepper.current();
   document.getElementById('spotlight-backdrop').classList.add('visible');
   document.getElementById('spotlight-tooltip').classList.add('visible');
   renderTutorialStep();
@@ -1511,6 +1541,7 @@ function closeTutorial(via) {
   document.getElementById('spotlight-cut').classList.remove('visible');
   document.getElementById('spotlight-backdrop').classList.remove('visible');
   document.getElementById('spotlight-tooltip').classList.remove('visible');
+  if (!FINAL_MODE) { StudyStepper.show(_tutStartScreen, {scroll: false}); if (tsSelectedFeature) { tsSelectedFeature = null; refresh(); } }   // back to where the participant was
   var duration = _tutorialOpenedAt ? Date.now() - _tutorialOpenedAt : null;
   fetch(TUTORIAL_SEEN_URL, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1518,12 +1549,8 @@ function closeTutorial(via) {
   }).catch(function() {});
 }
 function startTutorial() {
-  if (TUTORIAL_MODE === 'full') {
-    openTutorial('auto');
-  } else if (TUTORIAL_MODE === 'reminder') {
-    var nudge = document.getElementById('tutorial-nudge');
-    if (nudge) { nudge.classList.add('visible'); logEvent('tutorial_reminder_shown', {}); }
-  }
+  // Offered, never forced: the guide opens only if the participant chooses to view it (see StudyGuide).
+  if (TUTORIAL_MODE === 'full' || TUTORIAL_MODE === 'reminder') StudyGuide.offer(TUTORIAL_MODE, function() { openTutorial('offer'); });
 }
 document.getElementById('spotlight-next').addEventListener('click', function() {
   if (_tutorialStep < TUTORIAL_STEPS.length - 1) { _tutorialStep++; renderTutorialStep(); }

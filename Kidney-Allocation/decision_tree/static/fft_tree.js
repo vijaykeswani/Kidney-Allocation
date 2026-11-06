@@ -36,8 +36,7 @@
  * REQUIRED HELPERS (supplied by the caller so label wording stays in one place):
  *     esc(s)                        HTML-escape
  *     fmt(x)                        number -> display string
- *     prettyFeature(f)              "age_diff" -> "Age(A) - Age(B)"
- *     nodeCondText(node)            full condition text for a check
+ *     ruleHTML(node, i, kind)       the rule written as a sentence (HTML), kind = 'check' | 'refine'
  *     outcomeLabel(node, short)     outcome text for a check's YES exit
  *     refineOutcomeLabel(r, isTrue) outcome text for a tie-breaker branch
  *     defaultOutcomeLabel()         outcome text for the fall-through leaf
@@ -47,9 +46,9 @@
 
   // ── geometry ───────────────────────────────────────────────────────────────
   var PAD    = 26;   // canvas margin
-  var NODE_W = 268;  // decision box width
-  var LEAF_W = 158;  // leaf/outcome box width (also used for refine exits)
-  var H_GAP  = 26;   // between sibling subtrees
+  var NODE_W = 320;  // decision box width (a rule as a sentence at a readable size; no wider than a pair of outcome boxes, so it costs no extra tree width)
+  var LEAF_W = 150;  // leaf/outcome box width (also used for refine exits); outcome labels are short, and narrower boxes keep the tree from shrinking
+  var H_GAP  = 20;   // between sibling subtrees
   var V_GAP  = 56;   // between levels (room for branch labels)
 
   // References the same design tokens defined in model.html's :root — one
@@ -85,18 +84,20 @@
     function yesBranch(nd, i, exp) {
       if (!nd.refine) {
         var cls = nd.use_abs ? (nd.prefer_higher !== false ? 1 : 0) : nd.exit_class;
-        return {kind: 'leaf', role: 'exit', nodeIndex: i, cls: cls, label: H.outcomeLabel(nd, true)};
+        return {kind: 'leaf', role: 'exit', nodeIndex: i, cls: cls, label: H.outcomeLabel(nd, true), eyebrow: 'CHOOSE',
+                select: H.leafSelect ? H.leafSelect(nd, i, 'check') : null};
       }
       var r = nd.refine;
       return {
         kind: 'decision', role: 'refine', nodeIndex: i,
         eyebrow: 'FOLLOW-UP CHECK',
         caption: (exp && exp.refine_explanation) || 'Closer look',
-        cond: '|' + H.prettyFeature(r.feature) + '| ' + (r.op === '<=' ? '\u2264' : '\u2265') +
-              ' ' + H.fmt(Math.abs(r.threshold)),
-        yes: {kind: 'leaf', role: 'refine-exit', nodeIndex: i, branch: true,
-              cls: r.true_class, label: H.refineOutcomeLabel(r, true)},
-        no:  {kind: 'leaf', role: 'refine-exit', nodeIndex: i, branch: false,
+        rule: H.ruleHTML ? H.ruleHTML(nd, i, 'refine') : null,
+        hasRefine: true,
+        yes: {kind: 'leaf', role: 'refine-exit', nodeIndex: i, branch: true, eyebrow: 'CHOOSE',
+              cls: r.true_class, label: H.refineOutcomeLabel(r, true),
+              select: H.leafSelect ? H.leafSelect(nd, i, 'refine') : null},
+        no:  {kind: 'leaf', role: 'refine-exit', nodeIndex: i, branch: false, eyebrow: 'OTHERWISE',
               cls: r.false_class, label: H.refineOutcomeLabel(r, false)}
       };
     }
@@ -105,15 +106,12 @@
       if (i >= nodes.length) return defaultLeaf();
       var nd = nodes[i];
       var exp = (H.explanations && H.explanations[i]) || {};
-      var condText = nd.refine
-        ? ('|' + H.prettyFeature(nd.feature) + '| ' +
-           (nd.op === '<=' ? '\u2264' : '\u2265') + ' ' + H.fmt(Math.abs(nd.threshold)))
-        : H.nodeCondText(nd);
       return {
         kind: 'decision', role: 'check', nodeIndex: i,
         eyebrow: 'STEP ' + (i + 1),
         caption: exp.explanation || '',
-        cond: condText,
+        rule: H.ruleHTML ? H.ruleHTML(nd, i, 'check') : null,
+        hasRefine: !!nd.refine,
         yes: yesBranch(nd, i, exp),
         no: checkAt(i + 1)
       };
@@ -157,11 +155,12 @@
     }
     var label = document.createElement('div');
     label.className = 'fft-leaf-label';
-    label.textContent = n.label;
+    if (n.select) label.innerHTML = n.select;      // the outcome is a drop-down while editing (built by the page, labels escaped)
+    else label.textContent = n.label;
     el.appendChild(label);
 
-    if (editing) {
-      el.appendChild(makeBadge('fft-badge-pencil fft-badge-corner', '\u270E', 'Change this outcome'));
+    if (editing && n.role === 'default') {
+      el.appendChild(makeBadge('fft-badge-pencil fft-badge-corner', '\u270E', 'Change the default outcome'));
     }
     return el;
   }
@@ -184,48 +183,48 @@
     eyebrow.textContent = n.eyebrow;
     el.appendChild(eyebrow);
 
-    if (n.caption) {
+    if (n.rule) {
+      var rule = document.createElement('div');
+      rule.className = 'fft-rule';
+      // n.rule is built entirely from our own template strings with every label escaped (see ruleHTML in the page).
+      rule.innerHTML = n.rule;
+      el.appendChild(rule);
+    } else if (n.caption) {
       var cap = document.createElement('div');
       cap.className = 'fft-caption';
       cap.textContent = n.caption;
       el.appendChild(cap);
     }
-    var cond = document.createElement('div');
-    cond.className = 'fft-cond';
-    // n.cond is built entirely from our own template strings (prettyFeature
-    // wraps the factor name in a span so it can be color-highlighted) — no
-    // free-form user text ever ends up in here, so innerHTML is safe.
-    cond.innerHTML = n.cond;
-    el.appendChild(cond);
 
     if (isRefine) {
       if (editing) {
-        el.appendChild(makeBadge('fft-badge-pencil fft-badge-corner', '\u270E',
-          'Edit this follow-up check', {'data-refine': n.nodeIndex}));
+        var rm = document.createElement('button');
+        rm.type = 'button'; rm.className = 'fft-linkbtn';
+        rm.textContent = '\u2715 Remove this follow-up check';
+        rm.setAttribute('data-remove-followup', n.nodeIndex);
+        el.appendChild(rm);
       }
     } else if (editing) {
       var i = n.nodeIndex;
-      el.appendChild(makeBadge('fft-badge-pencil fft-badge-tl', '\u270E',
-        'Edit this check', {'data-node': i}));
       if (opts.nodeCount && opts.nodeCount > 1) {
-        el.appendChild(makeBadge('fft-badge-delete fft-badge-tl2', '\uD83D\uDDD1', 'Delete this check',
+        el.appendChild(makeBadge('fft-badge-delete fft-badge-tl', '\uD83D\uDDD1', 'Delete this rule',
           {'data-delete-node': i}));
       }
       var addCls = 'fft-badge-add fft-badge-br' + (opts.canAddMore === false ? ' fft-disabled' : '');
       el.appendChild(makeBadge(addCls, '+',
-        opts.canAddMore === false ? 'Limit reached — you can add two checks at a time'
-                                   : 'Add a check straight after this one',
+        opts.canAddMore === false ? 'Limit reached \u2014 you can add two rules at a time'
+                                   : 'Add a rule straight after this one',
         {'data-add-after': i}));
       if (opts.nodeCount && opts.nodeCount > 1) {
         el.appendChild(makeBadge('fft-badge-grip fft-badge-tr3', '\u283F', 'Drag to reorder',
           {'data-drag-handle': i}));
       }
       if (i > 0) {
-        el.appendChild(makeBadge('fft-badge-move fft-badge-tr2', '\u25B2', 'Move this check earlier',
+        el.appendChild(makeBadge('fft-badge-move fft-badge-tr2', '\u25B2', 'Move this rule earlier',
           {'data-move-up': i}));
       }
       if (opts.nodeCount && i < opts.nodeCount - 1) {
-        el.appendChild(makeBadge('fft-badge-move fft-badge-tr1', '\u25BC', 'Move this check later',
+        el.appendChild(makeBadge('fft-badge-move fft-badge-tr1', '\u25BC', 'Move this rule later',
           {'data-move-down': i}));
       }
     }
