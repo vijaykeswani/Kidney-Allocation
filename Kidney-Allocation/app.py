@@ -72,6 +72,12 @@ CONDITION_LABELS = {
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 
+# Testing aid. When ON, the intro page shows a version picker and the choice overrides the rotation (without advancing
+# the rotation counter). Leave it OFF for the real study, so nobody can choose their own condition.
+ALLOW_MODEL_CHOICE = 1
+# os.environ.get("ALLOW_MODEL_CHOICE", "").strip().lower() in ("1", "true", "yes", "on")
+MODEL_CHOICES = [("fft", "Decision tree"), ("twostage_v2", "Two-stage model (feature list v2)"), ("control", "Control")]
+
 
 def _admin_required(f):
     @functools.wraps(f)
@@ -312,6 +318,8 @@ def _intro_context(default_name=None, preselected_model=None, error=None):
         value_suffix=features.value_suffixes(), example=EXAMPLE_PAIR, n_pairs=PART1_N,
         default_name=default_name if default_name is not None else _new_participant_id(),
         preselected_model=preselected_model, error=error,
+        allow_model_choice=ALLOW_MODEL_CHOICE, model_choices=MODEL_CHOICES,
+        selected_model=preselected_model if preselected_model in dict(MODEL_CHOICES) else "",
     )
 
 
@@ -323,10 +331,14 @@ def intro():
 @app.route("/start", methods=["POST"])
 def do_start():
     name = (request.form.get("username") or "").strip()
+    chosen = (request.form.get("model_type") or "").strip()
     if len(name) < 2:
         return render_template("start.html", **_intro_context(
-            default_name=name, error="Enter at least 2 characters to continue."))
-    model_type = db.assign_next_condition(ROTATION_SEQUENCE)
+            default_name=name, preselected_model=chosen, error="Enter at least 2 characters to continue."))
+    if ALLOW_MODEL_CHOICE and chosen in MODEL_TYPES:
+        model_type = chosen                       # picked on the intro page (testing): bypasses the rotation
+    else:
+        model_type = db.assign_next_condition(ROTATION_SEQUENCE)
     session["username"] = name
     session["model_type"] = model_type
     db.set_model_type(name, model_type)
