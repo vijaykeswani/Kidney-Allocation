@@ -721,9 +721,10 @@ body { padding: 0; }
 .why-note { font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; }
 /* rules written as sentences: blue text with a small triangle marks what can be changed (no boxes) */
 .fft-rule { font-size: 16px; line-height: 1.85; color: var(--text-primary); margin-top: 2px; }
-.rule-sel-wrap { position: relative; display: inline-block; white-space: nowrap; color: #1d4ed8; }
+.rule-sel-wrap { position: relative; display: inline-grid; align-items: center; white-space: nowrap; color: #1d4ed8; }
 .rule-sel-wrap::after { content: ''; position: absolute; right: 1px; top: 50%; margin-top: -2px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; pointer-events: none; }
-select.rule-sel { -webkit-appearance: none; -moz-appearance: none; appearance: none; font: inherit; font-weight: 600; color: inherit; background: transparent; border: 0; border-radius: 0; margin: 0; padding: 0 16px 0 0; cursor: pointer; max-width: 100%; text-overflow: clip; }
+.rule-sel-size { grid-area: 1 / 1; visibility: hidden; padding-right: 16px; font-weight: 600; white-space: nowrap; pointer-events: none; }   /* the selected text, invisible: it makes the drop-down exactly as wide as that text, in whatever font is really drawn */
+select.rule-sel { grid-area: 1 / 1; width: 0; min-width: 100%; -webkit-appearance: none; -moz-appearance: none; appearance: none; font: inherit; font-weight: 600; color: inherit; background: transparent; border: 0; border-radius: 0; margin: 0; padding: 0 16px 0 0; cursor: pointer; text-overflow: clip; }
 select.rule-sel:hover { text-decoration: underline; text-underline-offset: 3px; }
 select.rule-sel:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; border-radius: 3px; }
 select.rule-sel option { color: #1f2937; font-weight: 400; }
@@ -732,7 +733,7 @@ select.rule-sel option { color: #1f2937; font-weight: 400; }
 @media (min-width: 1120px) { .tree-card { margin-left: -70px; margin-right: -70px; } }
 /* the outcome box carries its own drop-down and keeps the box's colour */
 .fft-leaf .rule-sel-wrap { color: inherit; }
-.fft-leaf select.rule-sel { font-size: var(--fs-md); font-weight: 700; }
+.fft-leaf select.rule-sel, .fft-leaf .rule-sel-size { font-size: var(--fs-md); font-weight: 700; }
 .fft-linkbtn { display: block; margin-top: 10px; background: none; border: none; padding: 0; font: inherit; font-size: 14px; color: #1d4ed8; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-align: left; }
 .fft-linkbtn:hover { color: #1e40af; }
 </style>
@@ -1131,23 +1132,13 @@ function gapChoices(feature, current) {
 }
 function nearestIn(arr, v) { var best = arr[0], d = Infinity; arr.forEach(function(x) { var dd = Math.abs(x - v); if (dd < d) { d = dd; best = x; } }); return best; }
 function gapUnit(feature, n) { var meta = FEATURE_GAP[feature] || ['', '']; return _unitStr(n, meta[1]); }        // " years" / " percentage points" / ""
-var _measureCtx;
-function textPx(text, px, weight) {       // how wide a drop-down's text is, so it can be sized to fit (no empty gap in the sentence)
-  if (_measureCtx === undefined) {
-    try { _measureCtx = /jsdom/i.test(navigator.userAgent) ? null : (document.createElement('canvas').getContext('2d') || null); } catch (e) { _measureCtx = null; }
-  }
-  if (!_measureCtx) return String(text).length * px * 0.6;
-  _measureCtx.font = weight + ' ' + px + 'px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
-  return _measureCtx.measureText(String(text)).width;
-}
 function ruleSelect(kind, i, field, options, selected, label, leaf) {
   var cur = options.filter(function(o) { return String(o[0]) === String(selected); })[0] || options[0];
-  var w = Math.ceil(textPx(cur[1], leaf ? 15.5 : 16, leaf ? 700 : 600)) + 21;         // text + room for the triangle
-  return '<span class="rule-sel-wrap"><select class="rule-sel" data-rule="' + kind + '" data-i="' + i + '" data-field="' + field + '" aria-label="' + esc(label) + '" style="width:' + w + 'px">'
+  return '<span class="rule-sel-wrap"><span class="rule-sel-size" aria-hidden="true">' + esc(cur[1]) + '</span>'
+    + '<select class="rule-sel" data-rule="' + kind + '" data-i="' + i + '" data-field="' + field + '" aria-label="' + esc(label) + '">'
     + options.map(function(o) { return '<option value="' + esc(String(o[0])) + '"' + (String(o[0]) === String(selected) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('')
     + '</select></span>';
-}
-// A rule as a sentence. While editing, the factor, the size of the gap and the patient to choose are drop-downs (blue);
+}// A rule as a sentence. While editing, the factor, the size of the gap and the patient to choose are drop-downs (blue);
 // on the read-only final page the same sentence shows those values in bold blue.
 function ruleHTML(nd, i, kind) {
   var r = kind === 'refine' ? nd.refine : nd;

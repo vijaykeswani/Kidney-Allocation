@@ -315,10 +315,76 @@ def contrib(model, key, patient):
     return edit_value(model, key, patient.get(key, 0)) if cond_pass(model, key, patient) else 0.0
 
 
+# ── "Check one factor first": an OPTIONAL first stage the participant can switch on ──────────────────────────────
+# If two patients differ on one chosen factor by at least `threshold`, the one with the higher (or lower) value gets the
+# kidney and nothing else is looked at. Otherwise the normal stage-2 rule decides, using the OTHER factors only.
+# The trainer never creates a gate: it exists only if the participant turns it on, and a model without one (or with
+# `on: false`) predicts exactly as before.
+GATE_PROB = 0.9
+DEFAULT_GATE = {"on": False, "feature": None, "threshold": None, "dir": "higher"}
+
+
+def validate_gate(gate):
+    """None if the gate is acceptable (no gate at all is fine), otherwise a message saying what is wrong."""
+    if gate is None:
+        return None
+    if not isinstance(gate, dict):
+        return "gate must be an object"
+    if not isinstance(gate.get("on"), bool):
+        return "gate.on must be true or false"
+    if gate["on"]:
+        if gate.get("feature") not in features.FEATURE_KEYS:
+            return "gate.feature must be one of the factors"
+        t = gate.get("threshold")
+        if isinstance(t, bool) or not isinstance(t, (int, float)) or not (0 < t <= 1000):
+            return "gate.threshold must be a positive number"
+        if gate.get("dir") not in ("higher", "lower"):
+            return "gate.dir must be 'higher' or 'lower'"
+    return None
+
+
+def sanitize_gate(gate):
+    """A clean copy (exactly the four known keys), or the default 'off' gate if there is none / it is off."""
+    if validate_gate(gate) or not isinstance(gate, dict):
+        return dict(DEFAULT_GATE)
+    if not gate["on"]:
+        return {"on": False, "feature": gate.get("feature") if gate.get("feature") in features.FEATURE_KEYS else None,
+                "threshold": gate.get("threshold") if isinstance(gate.get("threshold"), (int, float)) and gate.get("threshold") > 0 else None,
+                "dir": gate.get("dir") if gate.get("dir") in ("higher", "lower") else "higher"}
+    return {"on": True, "feature": gate["feature"], "threshold": float(gate["threshold"]), "dir": gate["dir"]}
+
+
+def _active_gate(model):
+    """(feature, threshold, dir) if the model has a valid, switched-on gate, else None (an invalid gate counts as off)."""
+    g = model.get("gate")
+    if not isinstance(g, dict) or not g.get("on") or validate_gate(g):
+        return None
+    return g["feature"], float(g["threshold"]), g["dir"]
+
+
+def _gate_pick(gate, a, b):
+    """'A' or 'B' if the first check settles this pair, else None."""
+    f, t, d = gate
+    diff = float(a.get(f, 0)) - float(b.get(f, 0))
+    if abs(diff) < t - 1e-9:
+        return None
+    return "A" if (diff > 0) == (d == "higher") else "B"
+
+
+def gate_verdict(model, a, b):
+    gate = _active_gate(model)
+    return _gate_pick(gate, a, b) if gate else None
+
+
 def predict_prob(model, a, b):
-    """P(patient A is chosen), under the model's current aggregation rule."""
+    """P(patient A is chosen): the first check if it settles the pair, otherwise the model's aggregation rule."""
     agg = model.get("aggregation", "weighted")
-    keys = features.FEATURE_KEYS
+    gate = _active_gate(model)
+    if gate:
+        pick = _gate_pick(gate, a, b)
+        if pick:
+            return GATE_PROB if pick == "A" else 1 - GATE_PROB
+    keys = [k for k in features.FEATURE_KEYS if not (gate and k == gate[0])]
     if agg == "tally":
         pa = pb = 0
         for k in keys:
@@ -354,7 +420,10 @@ def exit_reason(model, a, b):
     """One short line on why the model landed where it did — mirrors
     fft_model.explain_prediction's role for the tree."""
     agg = model.get("aggregation", "weighted")
-    keys = features.FEATURE_KEYS
+    gate = _active_gate(model)
+    if gate and _gate_pick(gate, a, b):
+        return f"Decided by the first check, on {features.FEATURE_BY_KEY[gate[0]]['label']}."
+    keys = [k for k in features.FEATURE_KEYS if not (gate and k == gate[0])]
     if agg == "tally":
         pa = pb = 0
         for k in keys:
@@ -434,8 +503,22 @@ def aggregation_sentence(agg):
             "for or against each of them, then pick whoever comes out ahead overall.")
 
 
+def gate_sentence(model):
+    gate = _active_gate(model)
+    if not gate:
+        return ""
+    f, t, d = gate
+    unit = features.FEATURE_BY_KEY[f].get("unit") or ""
+    more = "more" if d == "higher" else "less"
+    return (f"First, compare the two patients on {_noun(f)}: if they differ by at least {features.fmt_value(f, t)}"
+            f"{(' ' + unit) if unit and not features.FEATURE_BY_KEY[f].get('value_suffix') else ''}, "
+            f"whoever has {more} {_noun(f)} gets the kidney and nothing else is looked at.")
+
+
 def summary_text(model):
-    lines = [feature_sentence(model, k) for k in features.FEATURE_KEYS]
+    gate = _active_gate(model)
+    lines = [gate_sentence(model)] if gate else []
+    lines += [feature_sentence(model, k) for k in features.FEATURE_KEYS if not (gate and k == gate[0])]
     lines.append(aggregation_sentence(model.get("aggregation", "weighted")))
     return " ".join(lines)
 
@@ -477,6 +560,7 @@ def train_twostage(decisions, override=None):
             model = {
                 "type": "twostage",
                 "aggregation": "weighted",
+                "gate": dict(DEFAULT_GATE),      # never learned: only the participant can switch it on
                 "features": {k: _curve_to_params(k, learned[k], polarity[k])
                              for k in features.FEATURE_KEYS},
             }

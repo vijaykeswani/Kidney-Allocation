@@ -36,7 +36,7 @@ model = read("decision_tree/templates/model.html")
 for token, val in (("--patient-a", A), ("--patient-a-soft", A_SOFT), ("--patient-b", B), ("--patient-b-soft", B_SOFT)):
     expect(re.search(rf"{re.escape(token)}\s*:\s*{val}\b", model, re.I), f"model.html: {token} should be {val}")
 
-for rel in ("feature_list/templates/twostage.html", "feature_list/templates/twostage_v2.html"):
+for rel in ("feature_list/templates/twostage.html", "feature_list/templates/twostage_v2.html", "feature_list/templates/twostage_v3.html"):
     t = read(rel)
     for token, val in (("--patient-a", A), ("--patient-b", B)):
         expect(re.search(rf"{re.escape(token)}\s*:\s*{val}\b", t, re.I), f"{rel}: {token} should be pinned to {val}")

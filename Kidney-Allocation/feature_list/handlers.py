@@ -181,12 +181,26 @@ def final_view_v2():
     return final_view(template="twostage_v2.html")
 
 
+def results_view_v3():
+    return results_view(template="twostage_v3.html")
+
+
+def final_view_v3():
+    return final_view(template="twostage_v3.html")
+
+
 def apply_edit_handler(username, payload):
     """Apply a feature-list model edit (shared by v1 and v2 — same model
     schema, same storage). Returns (response_dict, http_status_code)."""
     model = payload.get("model")
     if not model:
         return {"error": "missing model"}, 400
+    if not twostage_model._is_valid_twostage_model(model):
+        return {"error": "invalid model"}, 400
+    err = twostage_model.validate_gate(model.get("gate"))
+    if err:
+        return {"error": err}, 400
+    model["gate"] = twostage_model.sanitize_gate(model.get("gate"))
     db.set_fft_override(username, model)
     version = db.bump_model_version(username)
     db.log_event(username, "model_edit_applied", {"model_version": version, "type": "twostage"})

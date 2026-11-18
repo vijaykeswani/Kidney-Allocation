@@ -50,9 +50,10 @@ def card_order(html):
     return sorted(features.FEATURE_KEYS, key=pos)
 
 seen = set()
+ARMS = ["fft", "twostage", "twostage_v2", "twostage_v3", "control"]
 for i in range(12):
     c = a.app.test_client(); name = f"order_user_{i}"
-    c.post("/start", data={"username": name, "model_type": ["fft", "twostage", "twostage_v2", "control"][i % 4]})
+    c.post("/start", data={"username": name, "model_type": ARMS[(i + 3) % 5]})
     saved = db.get_feature_order(name)
     check(sorted(saved) == sorted(features.FEATURE_KEYS), f"{name}: saved order is not a permutation of the factors")
     seen.add(tuple(saved))
@@ -61,9 +62,9 @@ for i in range(12):
         html = c.get("/questionnaire/1").data.decode(); orders.add(tuple(card_order(html)))
         c.post("/questionnaire/1/answer", data={"choice": random.choice("AB")})
     check(orders == {tuple(saved)}, f"{name}: the order changed between scenarios ({len(orders)} different) or doesn't match the saved order")
-    c.post("/start", data={"username": name, "model_type": ["fft", "twostage", "twostage_v2", "control"][i % 4]})
+    c.post("/start", data={"username": name, "model_type": ARMS[(i + 3) % 5]})
     check(db.get_feature_order(name) == saved, f"{name}: signing in again changed the order")
-    if i % 4 in (1, 2):                                  # the model page lists factors in the same order (v1) / weight order with this as tie-break (v2)
+    if ARMS[(i + 3) % 5].startswith("twostage"):                                  # the model page lists factors in the same order (v1) / weight order with this as tie-break (v2)
         for _ in range(15): c.post("/questionnaire/1/answer", data={"choice": random.choice("AB")})
         page = c.get("/results").data.decode()
         fd = json.JSONDecoder().raw_decode(page, page.index("[", page.index("var FEATURES_DATA = ")))[0]

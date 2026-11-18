@@ -72,14 +72,26 @@ def run(arm, name, edit=True, direct_part2=False):
         check("Advanced settings" not in body_html, f"{arm}: no 'Advanced settings' toggle")
         check('id="ts-lock-gate"' in body_html and "REQUIRE_REVIEW = true" in body_html and "StudyReview.init(" in body_html, f"{arm}: lock-in must be gated on the participant having reviewed the model")
         check("The current version predicts" in body_html and 'id="ts-intro-x"' in body_html, f"{arm}: the intro needs its live 'predicts X/N correctly' line")
-        if kind == "twostage_v2":     # the first-visit tutorial must be started AFTER the variables it reads exist (it silently never opened before)
+        if kind in ("twostage_v2", "twostage_v3"):     # the first-visit tutorial must be started AFTER the variables it reads exist (it silently never opened before)
             check(body_html.index("var TUTORIAL_MODE") < body_html.index("startTutorial();"), f"{arm}: startTutorial() runs before TUTORIAL_MODE is defined, so the tutorial never opens")
         check("built an AI model from your answers so far" in body_html, f"{arm}: the view/edit page needs its header")
-        if kind in ("twostage_v2", "fft"):        # (the older v1 layout has no step cards)
-            check('class="ts-step-body open" id="ts-step1-body"' in body_html, f"{arm}: Step 1 must be open on arrival so the model is visible without clicking")
-        if kind == "twostage_v2":
-            check('id="ts-feat-list"' in body_html and 'id="ts-review-progress"' in body_html and 'class="ts-step-body open" id="ts-step2-body"' not in body_html,
-                  f"{arm}: v2 needs the factor list with its review progress, and Step 2 collapsed")
+        if kind in ("twostage_v2", "twostage_v3", "fft"):
+            check('id="guide-offer"' in body_html and "StudyGuide.offer(" in body_html, f"{arm}: the guide must be offered through the notice")
+            check("openTutorial('auto'" not in body_html and "openTutorial('first_visit'" not in body_html, f"{arm}: nothing may open the guide by itself")
+        if kind in ("twostage_v2", "twostage_v3", "fft"):        # (the older v1 layout has no steps)
+            check('id="ts-stepper"' in body_html and 'id="ts-step-nav"' in body_html, f"{arm}: the steps need a stepper and Back/Next navigation")
+            check('id="ts-screen-1" data-screen="1">' in body_html, f"{arm}: Step 1 must be showing on arrival, so the model is visible without clicking")
+            check('id="ts-screen-2" data-screen="2" hidden>' in body_html, f"{arm}: the later screens start hidden")
+        if kind in ("twostage_v2", "twostage_v3"):
+            check('id="ts-feat-list"' in body_html and 'id="ts-review-progress"' in body_html and 'id="fp-backdrop"' in body_html and 'id="ts-screen-3" data-screen="3" hidden>' in body_html,
+                  f"{arm}: v2 needs the factor list, its review progress, the factor overlay, and a Step 3 screen")
+            if kind == "twostage_v3":
+              check('id="ts-gate"' in body_html and "var FIRST_CHECK = true" in body_html and "function renderGate(" in body_html, f"{arm}: the optional first-check question must be in Step 2")
+              check(".ts-gate-sentence select.rule-sel" in body_html and "appearance: none" in body_html, f"{arm}: the first-check sentence must carry its own drop-down styling")
+              check(".ts-agg-card .ts-agg-desc { max-height: 0" in body_html, f"{arm}: the combining options' descriptions should stay hidden until hover")
+              check("var ALLOW_EXCEPTIONS = false" in body_html, f"{arm}: 'This only counts in some cases' should be switched off for now")
+            check("updateStep2Pill" not in body_html and "ts-step2-chevron" not in body_html, f"{arm}: no leftovers from the old step cards")
+            check("a great deal" in body_html and 'max="4"' in body_html, f"{arm}: the strength scale should have a fourth level, 'a great deal'")
         if edit:
             if arm == "fft":
                 db.set_fft_override(name, {"nodes": [{"feature": "years_waiting_diff", "op": ">=", "threshold": 4.0, "use_abs": True,
@@ -119,7 +131,7 @@ def run(arm, name, edit=True, direct_part2=False):
     # ---- final page numbers vs independent recomputation on the hold-out
     rec = db.load_all_users()[name]
     part2 = [d for d in rec["part2"] if d.get("choice") in ("A", "B")]
-    if kind in ("twostage", "twostage_v2"):
+    if kind in ("twostage", "twostage_v2", "twostage_v3"):
         m, n = 0, 0
         for aa, bb, y in twostage_model._extract_queries(part2):
             m += twostage_model.predict(frozen["model"], aa, bb) == y; n += 1
@@ -130,7 +142,7 @@ def run(arm, name, edit=True, direct_part2=False):
     cases, _ = json.JSONDecoder().raw_decode(body, body.index("[", body.index("past_scenarios_json" if False else "var pastScenarios = ")))
     check(len(cases) == len(part2) == 10, f"{arm}: final page should embed exactly the 10 hold-out cases (got {len(cases)})")
     check("var FINAL_MODE = true" in body, f"{arm}: final page should be the read-only version of the model page")
-    if kind in ("twostage", "twostage_v2"):
+    if kind in ("twostage", "twostage_v2", "twostage_v3"):
         emb, _ = json.JSONDecoder().raw_decode(body, body.index("{", body.index("var model = ")))
         check(emb == json.loads(json.dumps(frozen["model"])), f"{arm}: final page must embed exactly the locked model")
     else:
@@ -152,7 +164,7 @@ def run(arm, name, edit=True, direct_part2=False):
     check(db.get_survey_answers(name).get("_model_edited") == frozen["edited"], f"{arm}: survey should record whether the model was edited")
 
 
-for arm in ("fft", "twostage", "twostage_v2"):
+for arm in ("fft", "twostage", "twostage_v2", "twostage_v3"):
     run(arm, f"{arm}_edited", edit=True)
     run(arm, f"{arm}_plain", edit=False)
 run("twostage_v2", "direct", edit=False, direct_part2=True)
@@ -164,4 +176,4 @@ if failures:
     for f in failures:
         print("  -", f)
     sys.exit(1)
-print("Study flow OK: lock -> hold-out -> final -> survey verified for fft, twostage, twostage_v2 (edited and unedited) and control.")
+print("Study flow OK: lock -> hold-out -> final -> survey verified for fft, twostage, twostage_v2, twostage_v3 (edited and unedited) and control.")

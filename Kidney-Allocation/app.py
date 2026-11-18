@@ -58,14 +58,15 @@ PART2_N = 10
 # the same size as Part 2, not an additional chunk on top.
 CONTROL_EXTRA_N = PART2_N
 
-MODEL_TYPES = ("fft", "twostage", "twostage_v2", "control")
-DISPLAYABLE_MODEL_TYPES = ("fft", "twostage", "twostage_v2")  # real models control can be shown
+MODEL_TYPES = ("fft", "twostage", "twostage_v2", "twostage_v3", "control")
+DISPLAYABLE_MODEL_TYPES = ("fft", "twostage", "twostage_v2", "twostage_v3")  # real models control can be shown
 
 # Conditions assigned automatically in rotation order (twostage excluded by design).
-ROTATION_SEQUENCE = ["fft", "twostage_v2", "control"]
+ROTATION_SEQUENCE = ["fft", "twostage_v3", "control"]
 CONDITION_LABELS = {
     "fft":         "Decision tree",
     "twostage_v2": "Feature list v2",
+    "twostage_v3": "Feature list v3",
     "twostage":    "Feature list",
     "control":     "Control",
 }
@@ -76,7 +77,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 # the rotation counter). Leave it OFF for the real study, so nobody can choose their own condition.
 ALLOW_MODEL_CHOICE = 1
 # os.environ.get("ALLOW_MODEL_CHOICE", "").strip().lower() in ("1", "true", "yes", "on")
-MODEL_CHOICES = [("fft", "Decision tree"), ("twostage_v2", "Two-stage model (feature list v2)"), ("control", "Control")]
+MODEL_CHOICES = [("fft", "Decision tree"), ("twostage_v2", "Two-stage v2"), ("twostage_v3", "Two-stage v3 (with first check)"), ("control", "Control")]
 
 
 def _admin_required(f):
@@ -231,7 +232,7 @@ def _lock_model():
         return db.get_frozen_model(username)
     kind = _display_model_type()
     is_control = _model_type() == "control"
-    handler = fl_handlers if kind in ("twostage", "twostage_v2") else dt_handlers
+    handler = fl_handlers if kind in ("twostage", "twostage_v2", "twostage_v3") else dt_handlers
     frozen = handler.freeze_model(username, use_override=not is_control)
     if frozen is None:          # not enough Part-1 answers to build a model
         return None
@@ -495,6 +496,8 @@ def results():
         return redirect(url_for("control_transition"))
     if _model_locked():
         return redirect(url_for("questionnaire", part=2))
+    if mt == "twostage_v3":
+        return fl_handlers.results_view_v3()
     if mt == "twostage_v2":
         return fl_handlers.results_view_v2()
     if mt == "twostage":
@@ -512,6 +515,8 @@ def final():
     # Part-2 hold-out. Nothing is retrained here.
     _lock_model()
     dmt = _display_model_type()
+    if dmt == "twostage_v3":
+        return fl_handlers.final_view_v3()
     if dmt == "twostage_v2":
         return fl_handlers.final_view_v2()
     if dmt == "twostage":
@@ -543,7 +548,7 @@ def apply_edit():
         return jsonify({"error": "Your model is locked in and can't be changed."}), 409
     payload = request.get_json(force=True, silent=True) or {}
     username = session["username"]
-    if _model_type() in ("twostage", "twostage_v2"):
+    if _model_type() in ("twostage", "twostage_v2", "twostage_v3"):
         data, code = fl_handlers.apply_edit_handler(username, payload)
     else:
         data, code = dt_handlers.apply_edit_handler(username, payload)

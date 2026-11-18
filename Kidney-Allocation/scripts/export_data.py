@@ -45,6 +45,10 @@ def export_participant_summary(conn, out_dir: str, stamp: str) -> str:
         count = lambda e: sum(1 for _, x in ev if x == e)
         first = lambda e: next((t for t, x in ev if x == e), None)
         hold = frozen.get("holdout", {})
+        # the optional "check one factor first" rule (feature-list models only; the tree has no such key)
+        model_json = frozen.get("model") if isinstance(frozen.get("model"), dict) else {}
+        gate = model_json.get("gate") if isinstance(model_json.get("gate"), dict) else {}
+        gate_used = bool(gate.get("on"))
         row = {
             "username": u["username"],
             "model_type": get("model_type"),
@@ -57,6 +61,10 @@ def export_participant_summary(conn, out_dir: str, stamp: str) -> str:
             "n_part1": frozen.get("n_part1"),
             "part1_matches_before_edit": frozen.get("matches_before_edit"),
             "part1_matches_at_lock": frozen.get("matches_at_lock"),
+            "gate_on": gate.get("on") if "gate" in model_json else None,
+            "gate_feature": gate.get("feature") if gate_used else None,
+            "gate_threshold": gate.get("threshold") if gate_used else None,
+            "gate_dir": gate.get("dir") if gate_used else None,
             "holdout_n": hold.get("n"),
             "holdout_matches": hold.get("matches"),
             "holdout_matches_if_unedited": hold.get("matches_if_unedited"),

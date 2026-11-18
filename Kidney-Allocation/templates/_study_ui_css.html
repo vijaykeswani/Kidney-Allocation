@@ -55,6 +55,15 @@
 .guide-actions { display: inline-flex; align-items: center; gap: 10px; }
 .guide-offer .btn { min-height: 36px; padding: 6px 16px; font-size: 14px; }
 body[data-step="2"] #guide-offer, body[data-step="3"] #guide-offer { display: none; }
+/* a drop-down that reads as part of a sentence: coloured text with a small triangle, no box */
+.rule-sel-wrap { position: relative; display: inline-grid; align-items: center; white-space: nowrap; color: #1d4ed8; }
+.rule-sel-wrap::after { content: ''; position: absolute; right: 1px; top: 50%; margin-top: -2px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; pointer-events: none; }
+.rule-sel-size { grid-area: 1 / 1; visibility: hidden; padding-right: 16px; font-weight: 600; white-space: nowrap; pointer-events: none; }   /* the selected text, invisible: it makes the drop-down exactly as wide as that text, in whatever font is really drawn */
+select.rule-sel { grid-area: 1 / 1; width: 0; min-width: 100%; -webkit-appearance: none; -moz-appearance: none; appearance: none; font: inherit; font-weight: 600; color: inherit; background: transparent; border: 0; border-radius: 0; margin: 0; padding: 0 16px 0 0; cursor: pointer; text-overflow: clip; }
+select.rule-sel:hover { text-decoration: underline; text-underline-offset: 3px; }
+select.rule-sel:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; border-radius: 3px; }
+select.rule-sel option { color: #1f2937; font-weight: 400; }
+.rule-val { font-weight: 600; color: #1d4ed8; }
 .ts-screen { margin-bottom: 22px; }
 .ts-screen[hidden] { display: none !important; }
 .ts-screen-title { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; color: #0f172a; }

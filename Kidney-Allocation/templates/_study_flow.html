@@ -91,11 +91,12 @@ var StudyReview = (function() {
   function $(id) { return document.getElementById(id); }
   function esc(t) { var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
   function save() { try { sessionStorage.setItem(cfg.storageKey, JSON.stringify(state)); sessionStorage.setItem(cfg.storageKey + '_notes', JSON.stringify(notes)); } catch (e) {} }
-  function count() { return cfg.keys.filter(function(k) { return state[k]; }).length; }
+  function count() { return cfg.keys.filter(function(k) { return state[k] || (cfg.exempt && cfg.exempt(k)); }).length; }
   function update() {
     var n = count(), total = cfg.keys.length, txt = $('ts-rp-text'), fill = $('ts-rp-fill');
-    if (txt) txt.textContent = (total === 1 ? (n ? 'Reviewed' : 'Not reviewed yet') : n + ' of ' + total + ' reviewed') + (cfg.hint && n < total ? ' \u2014 ' + cfg.hint : '');
-    if (fill) fill.style.width = (total ? n / total * 100 : 0) + '%';
+    var pk = cfg.progressKeys || cfg.keys, pn = pk.filter(function(k) { return state[k] || (cfg.exempt && cfg.exempt(k)); }).length, pt = pk.length;   // the progress bar can count a subset (e.g. just the factors)
+    if (txt) txt.textContent = (pt === 1 ? (pn ? 'Reviewed' : 'Not reviewed yet') : pn + ' of ' + pt + ' reviewed') + (cfg.hint && pn < pt ? ' \u2014 ' + cfg.hint : '');
+    if (fill) fill.style.width = (pt ? pn / pt * 100 : 0) + '%';
     var btn = $('ts-continue'), gate = $('ts-lock-gate'), blocked = cfg.required && n < total;
     if (btn && cfg.required) btn.disabled = blocked;
     if (gate) { gate.hidden = !blocked; if (blocked) gate.textContent = cfg.gateText ? cfg.gateText(n, total) : ('Please review all ' + total + ' before locking in your model (' + n + ' done).'); }
@@ -138,7 +139,9 @@ var StudyReview = (function() {
     if (ta) ta.addEventListener('change', function() { note(key, ta.value); log('review_note', {item: key, note: ta.value.slice(0, 1000)}); });
   }
   return {init: init, get: get, approve: approve, flag: flag, modified: modified, note: note, clear: clear, count: count,
-          actionsHTML: actionsHTML, wireActions: wireActions, done: function() { return count() === cfg.keys.length; }};
+          actionsHTML: actionsHTML, wireActions: wireActions, done: function() { return count() === cfg.keys.length; },
+          doneKeys: function(keys) { return keys.every(function(k) { return state[k] || (cfg.exempt && cfg.exempt(k)); }); },
+          countKeys: function(keys) { return keys.filter(function(k) { return state[k] || (cfg.exempt && cfg.exempt(k)); }).length; }};
 })();
 </script>
 
@@ -240,4 +243,15 @@ var StudyGuide = (function() {
   function viewed() { mark('viewed'); hide(); }        // the guide was opened some other way ("How this works")
   return {offer: offer, viewed: viewed};
 })();
+</script>
+
+<script>
+// A drop-down that reads as part of a sentence: coloured text with a small triangle. It is sized by an invisible copy of its
+// selected text (see .rule-sel-size), so it always matches the font that is really drawn.
+function studySelect(id, options, selected, label) {      // options: [[value, text], ...]
+  function h(t) { var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML.replace(/"/g, '&quot;'); }
+  var cur = options.filter(function(o) { return String(o[0]) === String(selected); })[0] || options[0];
+  return '<span class="rule-sel-wrap"><span class="rule-sel-size" aria-hidden="true">' + h(cur[1]) + '</span><select class="rule-sel" id="' + id + '" aria-label="' + h(label) + '">'
+    + options.map(function(o) { return '<option value="' + h(o[0]) + '"' + (String(o[0]) === String(selected) ? ' selected' : '') + '>' + h(o[1]) + '</option>'; }).join('') + '</select></span>';
+}
 </script>

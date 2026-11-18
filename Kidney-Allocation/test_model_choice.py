@@ -28,7 +28,7 @@ a.ALLOW_MODEL_CHOICE = False
 html = a.app.test_client().get("/intro?model=fft").data.decode()
 check('name="model_type"' not in html, "the picker must not be shown unless ALLOW_MODEL_CHOICE is on")
 idx0 = db.get_rotation_index(); expected = a.ROTATION_SEQUENCE[idx0 % len(a.ROTATION_SEQUENCE)]
-other = next(m for m in ("fft", "twostage_v2", "control") if m != expected)
+other = next(m for m in ("fft", "twostage_v2", "twostage_v3", "control") if m != expected)
 start("off_user", model_type=other)
 check(db.get_model_type("off_user") == expected, f"with the picker off a posted choice must be ignored (got {db.get_model_type('off_user')}, rotation says {expected})")
 check(db.get_rotation_index() == idx0 + 1, "the rotation should advance when it assigns the arm")
@@ -37,12 +37,14 @@ check(db.get_rotation_index() == idx0 + 1, "the rotation should advance when it 
 a.ALLOW_MODEL_CHOICE = True
 html = a.app.test_client().get("/intro").data.decode()
 opts = re.findall(r'<option value="([^"]*)"', html.split('name="model_type"')[1].split("</select>")[0])
-check(opts == ["", "fft", "twostage_v2", "control"], f"picker options should be Automatic + the three versions, no v1 (got {opts})")
-check("Two-stage model" in html and "Decision tree" in html and "Control" in html, "picker labels")
+check(opts == ["", "fft", "twostage_v2", "twostage_v3", "control"], f"picker options should be Automatic + the four versions, no v1 (got {opts})")
+check("Two-stage v2" in html and "Two-stage v3" in html and "Decision tree" in html and "Control" in html, "picker labels")
+check(html.index('name="model_type"') < html.index("The task:"), "the picker belongs at the very top of the page, above the heading")
+check('id="start-form"' in html and 'form="start-form"' in html, "the picker sits outside the form, so it must be linked to it")
 check("twostage\"" not in html.split('name="model_type"')[1].split("</select>")[0], "v1 must not be offered")
 check(re.search(r'<option value="twostage_v2"\s+selected', a.app.test_client().get("/intro?model=twostage_v2").data.decode()) is not None, "?model=twostage_v2 should preselect it")
 check(re.search(r'<option value="fft"\s+selected', a.app.test_client().get("/intro").data.decode()) is None, "nothing preselected by default")
-for choice in ("fft", "twostage_v2", "control"):
+for choice in ("fft", "twostage_v2", "twostage_v3", "control"):
     before = db.get_rotation_index()
     c, r = start("pick_" + choice, model_type=choice)
     check(r.status_code == 302, f"{choice}: start should redirect")

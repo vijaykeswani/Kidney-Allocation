@@ -74,9 +74,12 @@ def rand_model():
     m = {"aggregation": random.choice(["weighted", "tally", "prominent"]), "features": {}}
     for k in KEYS:
         other = random.choice([x for x in KEYS if x != k])
-        m["features"][k] = {"matters": random.choice([0, 1, 1.5, 2, 2.7, 3]), "dir": random.choice(["favor", "against"]),
+        m["features"][k] = {"matters": random.choice([0, 1, 1.5, 2, 2.7, 3, 3.6, 4]), "dir": random.choice(["favor", "against"]),
                             "mode": random.choice(["steady", "first", "last", "anyvsnone"]), "cutoff": float(random.choice(VALS[k][1:])),
                             "cond": {"on": random.random() < .3, "when": other, "test": random.choice(["zero", "nonzero", "atleast"]), "n": random.choice([1, 2])}}
+    if random.random() < .5:           # sometimes the participant has switched on "check one factor first"
+        gk = random.choice(KEYS); diffs = sorted({abs(x - y) for x in VALS[gk] for y in VALS[gk] if x != y})
+        m["gate"] = {"on": True, "feature": gk, "threshold": float(random.choice(diffs)), "dir": random.choice(["higher", "lower"])}
     return m
 
 
@@ -98,7 +101,8 @@ if node:
 if have_jsdom:
     static_js = open(os.path.join(ROOT, "decision_tree", "static", "fft_tree.js")).read()
     pages = {}
-    for arm, name in (("twostage_v2", "ts"), ("fft", "tree")):
+    for arm, name in (("twostage_v2", "ts"), ("twostage_v3", "ts3"), ("fft", "tree")):
+        import db; db.set_rotation_override(arm)          # /start takes its arm from the rotation
         c = a.app.test_client(); c.post("/start", data={"username": "p_" + name, "model_type": arm})
         for _ in range(20):
             c.post("/questionnaire/1/answer", data={"choice": random.choice("AB")})
