@@ -62,7 +62,7 @@ MODEL_TYPES = ("fft", "twostage", "twostage_v2", "control")
 DISPLAYABLE_MODEL_TYPES = ("fft", "twostage", "twostage_v2")  # real models control can be shown
 
 # Conditions assigned automatically in rotation order (twostage excluded by design).
-ROTATION_SEQUENCE = ["fft", "twostage_v2", "control"]
+ALL_CONDITIONS = ["fft", "twostage_v2", "control"]
 CONDITION_LABELS = {
     "fft":         "Decision tree",
     "twostage_v2": "Feature list v2",
@@ -326,7 +326,7 @@ def do_start():
     if len(name) < 2:
         return render_template("start.html", **_intro_context(
             default_name=name, error="Enter at least 2 characters to continue."))
-    model_type = db.assign_next_condition(ROTATION_SEQUENCE)
+    model_type = db.assign_next_condition(db.get_enabled_conditions(ALL_CONDITIONS))
     session["username"] = name
     session["model_type"] = model_type
     db.set_model_type(name, model_type)
@@ -661,7 +661,8 @@ def tutorial_seen():
 def admin_panel():
     idx = db.get_rotation_index()
     override = db.get_rotation_override()
-    next_condition = override if override else ROTATION_SEQUENCE[idx % len(ROTATION_SEQUENCE)]
+    enabled = db.get_enabled_conditions(ALL_CONDITIONS)
+    next_condition = override if override else enabled[idx % len(enabled)]
     participants = db.list_all_participants()
     return render_template(
         "admin.html",
@@ -669,7 +670,8 @@ def admin_panel():
         override=override,
         next_condition=next_condition,
         participants=participants,
-        rotation_sequence=ROTATION_SEQUENCE,
+        all_conditions=ALL_CONDITIONS,
+        rotation_sequence=enabled,
         condition_labels=CONDITION_LABELS,
     )
 
@@ -678,7 +680,7 @@ def admin_panel():
 @_admin_required
 def admin_set_override():
     condition = request.form.get("condition")
-    if condition in ROTATION_SEQUENCE:
+    if condition in ALL_CONDITIONS:
         db.set_rotation_override(condition)
     return redirect(url_for("admin_panel"))
 
@@ -687,6 +689,22 @@ def admin_set_override():
 @_admin_required
 def admin_clear_override():
     db.clear_rotation_override()
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/toggle-condition", methods=["POST"])
+@_admin_required
+def admin_toggle_condition():
+    condition = request.form.get("condition")
+    if condition in ALL_CONDITIONS:
+        enabled = db.get_enabled_conditions(ALL_CONDITIONS)
+        if condition in enabled:
+            updated = [c for c in enabled if c != condition]
+            if updated:  # keep at least one enabled
+                db.set_enabled_conditions(updated)
+        else:
+            updated = [c for c in ALL_CONDITIONS if c in enabled or c == condition]
+            db.set_enabled_conditions(updated)
     return redirect(url_for("admin_panel"))
 
 

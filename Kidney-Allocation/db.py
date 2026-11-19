@@ -901,6 +901,18 @@ def assign_next_condition(sequence):
     return condition
 
 
+def get_enabled_conditions(all_conditions):
+    val = _get_setting("rotation_enabled")
+    if not val:
+        return list(all_conditions)
+    enabled = set(val.split(","))
+    return [c for c in all_conditions if c in enabled]
+
+
+def set_enabled_conditions(conditions):
+    _set_setting("rotation_enabled", ",".join(conditions))
+
+
 def list_all_participants():
     """All participants ordered newest-first, for the admin panel."""
     with _connect() as conn:

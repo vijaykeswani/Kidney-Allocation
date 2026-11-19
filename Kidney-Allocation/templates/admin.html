@@ -75,6 +75,28 @@
   </div>
 </div>
 
+<!-- Condition toggles card -->
+<div class="card">
+  <h2>Conditions in Rotation</h2>
+  <p class="muted" style="margin:0 0 14px;">Toggle which conditions are included in the rotation. At least one must remain enabled.</p>
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    {% for c in all_conditions %}
+    <form method="post" action="{{ url_for('admin_toggle_condition') }}" style="margin:0;">
+      <input type="hidden" name="condition" value="{{ c }}">
+      {% if c in rotation_sequence %}
+        <button type="submit" class="btn-primary" style="display:flex; align-items:center; gap:6px;">
+          <span style="font-size:12px;">&#10003;</span> {{ condition_labels.get(c, c) }}
+        </button>
+      {% else %}
+        <button type="submit" class="btn-neutral" style="display:flex; align-items:center; gap:6px; opacity:0.65;">
+          <span style="font-size:12px;">&#10005;</span> {{ condition_labels.get(c, c) }}
+        </button>
+      {% endif %}
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
 <!-- Override card -->
 <div class="card">
   <h2>One-time Override</h2>
@@ -95,7 +117,7 @@
   <form method="post" action="{{ url_for('admin_set_override') }}">
     <div class="form-row">
       <select name="condition">
-        {% for c in rotation_sequence %}
+        {% for c in all_conditions %}
         <option value="{{ c }}" {% if c == override %}selected{% endif %}>{{ condition_labels.get(c, c) }}</option>
         {% endfor %}
       </select>
@@ -107,7 +129,7 @@
 <!-- Counter card -->
 <div class="card">
   <h2>Rotation Counter</h2>
-  <p class="muted" style="margin:0 0 10px;">Change the counter to shift which condition comes next in the cycle. Counter&nbsp;mod&nbsp;3 determines the slot (0=Decision&nbsp;tree, 1=Feature&nbsp;list&nbsp;v2, 2=Control).</p>
+  <p class="muted" style="margin:0 0 10px;">Change the counter to shift which condition comes next in the cycle. Counter&nbsp;mod&nbsp;{{ rotation_sequence | length }} determines the slot ({% for c in rotation_sequence %}{{ loop.index0 }}={{ condition_labels.get(c, c) }}{% if not loop.last %}, {% endif %}{% endfor %}).</p>
   <form method="post" action="{{ url_for('admin_set_counter') }}">
     <div class="form-row">
       <input type="number" name="counter" min="0" value="{{ rotation_index }}" style="width:100px;">
